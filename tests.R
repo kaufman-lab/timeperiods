@@ -11,6 +11,50 @@ source("timeperiod_functions.R")
 
 set.seed(180)
 
+
+
+##test CJ for data.tables
+
+X <- data.table(x1=1:2,x2=2:3)
+Y <- data.table(y1=4:6,y2=5:7)
+stopifnot(all.equal(CJ.dt(X,Y), 
+                    data.table(x1=rep(1:2,times=3),
+                               x2=rep(2:3,times=3),
+                               y1=rep(4:6,each=2),
+                               y2=rep(5:7,each=2)
+                    )))
+
+
+X <- data.table(
+  x1 = 1:8,
+  x2 = 2:9,
+  id1 = rep(1:2, each = 2),
+  id2 = rep(1:2, times = 2)
+)
+Y <- data.table(
+  y1 = 4:11,
+  y2 = 5:12,
+  id1 = rep(1:2, each = 2),
+  id2 = rep(1:2, times = 2)
+)
+
+
+##CJ.dt with groups should be like iterating through each combination
+#of groups and doing a cartesian merge/grid expand within that:
+templ <- list()
+counter <- 1
+for(i in unique(X$id1)){
+  for(j in unique(X$id2)){
+    templ[[counter]] <- CJ.dt(X[id1==i&id2==j],Y[id1==i&id2==j,list(y1,y2)])
+    counter <- counter +1
+  }
+}
+stopifnot(identical(
+  CJ.dt(X,Y,groups=c("id1","id2")), 
+  rbindlist(templ)
+))
+
+
 #averaging intervals longer than observed period
 a_start_date <- seq(structure(10590, class = "Date"),
                     structure(17163, class = "Date"),by=7)
@@ -40,7 +84,7 @@ q0_2 <- interval_weighted_avg_slow_f(x=a0,
                                    group_vars=c("id1","id2"))
 
 
-all.equal(q0_1,q0_2)
+stopifnot(all.equal(q0_1,q0_2))
 
   #simple example:
 #in this example, b is a regular schedule over which we'd like to compute averages of values from a
@@ -88,7 +132,7 @@ q2 <- interval_weighted_avg_slow_f(x=a,
                              group_vars=c("id","id2"),
                              value_vars=c("value","value2"))
 
-all.equal(q1,q2)
+stopifnot(all.equal(q1,q2))
 
 
 ##test missingness when required_percentage is not 100
@@ -109,7 +153,7 @@ qm2 <- interval_weighted_avg_slow_f(x=a,
                                    group_vars=c("id","id2"),
                                    value_vars=c("value","value2"),
                                    required_percentage=50)
-all.equal(q1,q2)
+stopifnot(all.equal(q1,q2))
 
 
 
@@ -152,10 +196,12 @@ b3_12 <- data.table(id=1L,id2=2L,start=seq(0L,54L,by=3L))
 b3_12[,end:=start+2L]
 b3_21 <- data.table(id=2L,id2=1L,start=seq(3L,43L,by=20L))
 b3_21[,end:=start+19L]
-b3_22 <- data.table(id=2L,id2=2L,start=5L,end=12L)
+b3_22 <- data.table(id=c(2L),id2=c(2L),start=c(5L,100L),
+                    end=c(12L,101L))
 
 b3 <- rbind(b3_11,b3_12,b3_21,b3_22) 
-#note that for id=1,id2=1 and id=1,id2=2 these should be the same as qm1 and q2
+#note that for id=1,id2=1 and id=1,id2=2 these should be the same as 
+#subsets of qm1 and q2_1 respectively
 
 
 
@@ -167,15 +213,18 @@ q3_1 <- interval_weighted_avg_f(x=a,
                                 required_percentage = 50
 )
 
+stopifnot(all.equal(q3_1[id==1&id2==1],qm1[id==1&id2==1]))
+stopifnot(all.equal(q3_1[id==1&id2==2],q2_1[id==1&id2==2]))
 
 q3_2 <- interval_weighted_avg_slow_f(x=a2,
-                                     y=b2,
+                                     y=b3,
                                      interval_vars=c("start","end"),
                                      group_vars=c("id","id2"),
                                      value_vars=c("value","value2"),
                                      required_percentage = 50
 )
 
+all.equal(q3_1,q3_2)
 
 
 #irregular length observation periods that are not necessarily adjoining 

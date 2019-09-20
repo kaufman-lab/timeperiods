@@ -1,15 +1,23 @@
 library(data.table)
 
-#from https://github.com/lockedata/optiRum/blob/master/R/CJ.dt.R
 
-CJ.dt <- function(X, Y) {
-  k <- NULL
-  X <- X[, c(k = 1, .SD)]
-  setkey(X, k)
-  Y <- Y[, c(k = 1, .SD)]
-  setkey(Y, NULL)
+#a function to grid expand two data.tables
+#largely based on https://github.com/lockedata/optiRum/blob/master/R/CJ.dt.R
+#groups is a character vector
+CJ.dt <- function(X, Y,groups=NULL) {
+  kvar <- "k"
+  while(kvar%in% names(X)|kvar%in% names(Y)){
+    kvar <- paste0("i.",kvar)
+  }
+  X <- copy(X)
+  Y <- copy(Y)
+  X[,(kvar):=1]
+  Y[,(kvar):=1]
+  setkeyv(X, c(kvar,groups))
+  setkeyv(Y, c(kvar,groups))
   X[Y, allow.cartesian = TRUE][, `:=`(k, NULL)][]
-} 
+}
+
 
 
 #function to take non-overlapping time-integrated averages observed over a defined period
@@ -93,9 +101,6 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     if(!all(group_vars %in% names(x))){
       stop("group_vars are not found in columns of x")
     }
-    
-    #stop if group vars exist in y
-    if(any(group_vars %in% names(y))){stop("grouping vars in y not implemented")}
   }
   
   print("test")
@@ -110,11 +115,9 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   #set keys for testing if there are overlaps
   #groups do not need to be in x but they do need to be in y
   if(!skip_overlap_check){
-    setkeyv(y,interval_vars)
     setkeyv(x,c(group_vars,interval_vars))
     
     #stop if there are overlapping periods within groups: 
-    stopifnot(nrow(foverlaps(y,y))==nrow(y))
     stopifnot(nrow(foverlaps(x,x))==nrow(x))  
     print(paste(Sys.time(),"passed test to determine whether data is non-overlapping"))
   }else{
@@ -150,7 +153,7 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   
   #but for each value variable, the number of non-missing days also needs to counted separately:
   #create a character vector (the length of value_vars) that will be column names in x,y, and z that are not in use already
-  print("test2")
+
   #temp nobs vars will be the count (number) of non-missing obs for each row resulting from the foverlaps merge
   temp_nobs_vars <- paste("temp_nobs",value_vars, sep="_")
   for(i in 1:length(temp_nobs_vars)){
@@ -166,7 +169,8 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
       ydur <- paste0("i.",nobs_vars[i])
     }
   }
-  print("test3")
+  
+  
   #make a copy of y so a new column doesn't get created in the user's data.table
   y <- copy(y)
   
@@ -176,8 +180,10 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   y[,(ydur):=as.numeric( (get(interval_vars[2])-get(interval_vars[1])) + 1)]
   
   ### merge x and y ####
-  setkeyv(y,interval_vars)
-  setkeyv(x,interval_vars)
+  #group variables in x AND y. (group_vars are known to be in x from an error check above)
+  overlapping_group_vars <- intersect(group_vars,names(y)) 
+  setkeyv(y,c(overlapping_group_vars, interval_vars))
+  setkeyv(x,c(overlapping_group_vars, interval_vars))
   z <- foverlaps(x,y,nomatch=NULL)  
   
    #nomatch=NULL here means intervals in x that don't match to y are dropped
@@ -187,9 +193,9 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     #afaik, foverlaps has no way of producing these *for every category defined by groups*
 
   #get intervals in y that were not joined to x
-  setkeyv(y,interval_vars)
-  setkeyv(z,interval_vars)
-  non_joins <- y[!z] #idiomatically: return y subsetted to rows of not z
+  setkeyv(y,c(overlapping_group_vars, interval_vars))
+  setkeyv(z,c(overlapping_group_vars, interval_vars))
+  non_joins <- y[!z] #data.table idiomatically: return y subsetted to rows of "not z"
         #that is, return rows of y that don't match to z
   if(nrow(non_joins)>0){
     #get all possible combinations of group variables and expand them:
@@ -199,9 +205,10 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     names(unique_id_list) <- group_vars
     q <- do.call(CJ,unique_id_list)
     
-    stopifnot(!any(group_vars %in% names(y)))
-    non_joins <- CJ.dt(non_joins,q)
-    
+    #if there are no group_vars in y just grid expand the two data.tables together
+
+      non_joins <- CJ.dt(non_joins,q,overlapping_group_vars)
+
     ##add in intervals in y that weren't matched to intervals in x 
     #separately for each combination of groups
     z <- rbindlist(list(z,non_joins),fill=TRUE)
@@ -216,7 +223,6 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   #the duration of overlap is zero, not missing.
   EVAL("z[is.na(",dur,"),",dur,":=0]")
   
-  print("test4")
   #if value_var is missing for a row, then number of observations in this period is 0
   #otherwise, nobs is the length of the period
   for(i in 1:length(temp_nobs_vars)){
@@ -224,7 +230,7 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     EVAL("z[tmp,",temp_nobs_vars[i],":=0]")
     EVAL("z[!tmp,",temp_nobs_vars[i],":=",dur,",]")
   }
-  print("test5")
+  
   
   #define xdur as the sum of durations over y intervals
   #keying by interval_vars should be the same as keying by interval_vars[1]
@@ -236,8 +242,6 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   for(i in 1:length(temp_nobs_vars)){
     z[,(nobs_vars[i]):= sum(get(temp_nobs_vars[i])),by=c(group_vars,interval_vars) ]  
   }
-  print("test6")
-  
   
   #time weighted averaging:
   #for all value vars, calculate time-weighted mean
@@ -246,7 +250,6 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   #time-weighted average:
   #ie sum(value1*duration)/xduration, sum(value2*duration)/xduration
   tw_avg <- paste0(value_vars,"=sum(",value_vars,"*",dur, ",na.rm=TRUE)/",nobs_vars,collapse=",")
-  print("test7")
   #xdur and ydur, and nobs_vars  provide no additional grouping here 
   #since they were created as a single value within cateogires of interval_vars and group_vars
   #but including them in the by argument ensures they get passed to the resulting q object
@@ -273,6 +276,8 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
                                          required_percentage=100,skip_overlap_check=FALSE){
   
   EVAL <- function(...)eval(parse(text=paste0(...)))
+  
+  overlapping_group_vars <- intersect(group_vars,names(y)) 
   
   #create a length-1 character vector that will be a column name in x,y, and z that is not in use already
   t <- "time"
@@ -324,12 +329,15 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
   x_expanded[, (measurement):=1L]
   
   y_expanded <-  EVAL("y[,list(",t,"=",interval_vars[1],":",interval_vars[2],"),
-       by=interval_vars]")
+       by=c(interval_vars,overlapping_group_vars)]")
   
-  #y is expanded but if grouping variables are not in y there is only one set of intervals
-  #to "complete" y, make a copy of y for groups correspnding to every combination of grouping variables
+  #y is expanded but if grouping variables are not in y (ie if overlapping_group_vars is NULL) 
+   #then there is only one set of intervals
+  #in order to "complete" y, make a copy of y for groups correspnding to every combination of grouping variables
   #this will represent the desired output structure: 
    #for every combination of group_vars, have every time-interval in y
+  
+  #if grouping variables *are* in y...?
   
   #take unique values of every group_var
   #https://stackoverflow.com/questions/36953026/what-is-the-fastest-way-to-get-a-vector-of-sorted-unique-values-from-a-data-tabl
