@@ -1,23 +1,35 @@
 library(data.table)
 
 
-#a function to grid expand two data.tables
+#a function to grid expand an arbitrary number of data.tables
 #largely based on https://github.com/lockedata/optiRum/blob/master/R/CJ.dt.R
-#groups is a character vector
-CJ.dt <- function(X, Y,groups=NULL) {
+#groups is a character vector corresponding to column names of grouping vars  
+ #in all of the data.tables
+CJ.dt <- function(...,groups=NULL) {
+  l = list(...)
+  if(any(sapply(l,nrow)==0)){stop("one or more data.tables have no rows")}
   kvar <- "k"
-  while(kvar%in% names(X)|kvar%in% names(Y)){
+  
+  #while kvar is in names of any of the data.tables, keep prepending i. to it until it's not
+  while(any(sapply(lapply(l,names),function(n){kvar%in%n}))){
     kvar <- paste0("i.",kvar)
   }
-  X <- copy(X)
-  Y <- copy(Y)
-  X[,(kvar):=1]
-  Y[,(kvar):=1]
-  setkeyv(X, c(kvar,groups))
-  setkeyv(Y, c(kvar,groups))
-  X[Y, allow.cartesian = TRUE][, `:=`(k, NULL)][]
+  
+  lapply(l,function(z){
+    z[,(kvar):=1]
+    setkeyv(z,c(kvar,groups))
+    NULL
+    })
+  mymerge = function(x,y) x[y, allow.cartesian = TRUE]
+  out <- Reduce(mymerge,l)
+  out[,(kvar):=NULL]
+  
+  lapply(l,function(z){
+    z[,(kvar):=NULL]
+    NULL
+  })
+  out[]
 }
-
 
 
 #function to take non-overlapping time-integrated averages observed over a defined period
@@ -207,7 +219,7 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     
     #if there are no group_vars in y just grid expand the two data.tables together
 
-      non_joins <- CJ.dt(non_joins,q,overlapping_group_vars)
+      non_joins <- CJ.dt(non_joins,q,groups=overlapping_group_vars)
 
     ##add in intervals in y that weren't matched to intervals in x 
     #separately for each combination of groups
