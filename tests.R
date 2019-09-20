@@ -32,20 +32,44 @@ q2 <- interval_weighted_avg_slow_f(x=a,
                                    group_vars=c("id1","id2"))
 
 
-all.equal(q1[,1:6],q2)
+all.equal(q1,q2)
 
   #simple example:
-a <- CJ(id=1:2,id2=1:2,start=seq(1L,50L,by=7L))
+#in this example, b is a regular schedule over which we'd like to compute averages of values from a
+#a is also on a regular schedule that does not fit neatly into b's schedule 
+#(some intervals in a partially overlap with two intervals in b )
+#additionally, the first interval in a doesn't overlap with 
+ #intervals in b at all and is entirely non-adjoining. since we're looking for averages over intervals in b, 
+ #we don't care about this interval and it should be left out of the results
+
+#b contains an interval that is observed in a for almost all but not the entire period 
+ #(partial overlap, we probably want an average for this period)
+#b also contains an interval that is barely observed except for a small overlap
+  #(partial overlap, we probably want NA for the average of this period)
+
+
+
+#b finishes with an interval which contains no overlap with any intervals in a
+#we want averges for all intervals in b--
+ #so the result should have a row for intervals in b whether there's a complete, partial, or no overlap with a:
+ #intervals in a that don't overlap at all with intervals in b should not be returned--
+  #because we have no interest in intervals not specified in b
+
+a <- CJ(id=1:2,id2=1:2,start=c(-13L,seq(1L,36L,by=7L)))
 a[, end:=start+6L]
 a[, value:=rbinom(nrow(a),5,prob=.5)]
-b <- data.table(start=seq(0,42,by=14))
+#randomly insert some missing values:
+a[as.logical(rbinom(nrow(a),1,prob=.3)), value:=NA]
+b <- data.table(start=seq(0,56,by=14))
 b[,end:=start+13L]
 
 
 q1 <- interval_weighted_avg_f(x=a,
-                             y=b,interval_vars=c("start","end"),
+                             y=b,
+                             interval_vars=c("start","end"),
                              group_vars=c("id","id2"),
-                             value_vars=c("value"))
+                             value_vars=c("value")
+                             )
 
 
 q2 <- interval_weighted_avg_slow_f(x=a,
@@ -54,12 +78,32 @@ q2 <- interval_weighted_avg_slow_f(x=a,
                              group_vars=c("id","id2"),
                              value_vars=c("value"))
 
-all.equal(q1[,1:5],q2)
+all.equal(q1,q2)
+
+
+##test missingness when required_percentage is not 100
+
+
+q1 <- interval_weighted_avg_f(x=a,
+                              y=b,
+                              interval_vars=c("start","end"),
+                              group_vars=c("id","id2"),
+                              value_vars=c("value"),
+                              required_percentage = 70
+)
+
+
+q2 <- interval_weighted_avg_slow_f(x=a,
+                                   y=b,
+                                   interval_vars=c("start","end"),
+                                   group_vars=c("id","id2"),
+                                   value_vars=c("value"),
+                                   required_percentage=70)
 
 
 ###next steps: deal with missing values in x correctly such that the percentage function works in slow function
 #actually test missing values
-#combine the functions into one
+##add duration columns to slow
 ##y can be overlapping
 ##y can have groups that match groups in x
 ##y can have groups that match groups in x: partial overlap (ie more grouping vars in x than in y)
