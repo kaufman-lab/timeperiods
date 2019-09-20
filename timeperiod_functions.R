@@ -71,10 +71,17 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   }
   
   if(x[,!all(sapply(.SD,is.integer)|sapply(.SD,function(x){class(x)=="Date"})),.SDcols=interval_vars]){
-    stop("interval_vars must correspond to columns of class integer or Date")
+    stop("interval_vars must correspond to columns in x of class integer or Date")
   }
   if(x[,class(.SD[[1]])!=class(.SD[[2]]),.SDcols=interval_vars]){
-    stop("interval_vars must correspond to columns of the same class")
+    stop("interval_vars must correspond to columns in x of the same class")
+  }
+  
+  if(y[,!all(sapply(.SD,is.integer)|sapply(.SD,function(x){class(x)=="Date"})),.SDcols=interval_vars]){
+    stop("interval_vars must correspond to columns in y of class integer or Date")
+  }
+  if(y[,class(.SD[[1]])!=class(.SD[[2]]),.SDcols=interval_vars]){
+    stop("interval_vars must correspond to columns in y of the same class")
   }
   
   #stop if there are variables specified in both groups and interval_vars
