@@ -18,16 +18,28 @@ b <- data.table(start_date=as.Date(paste0(1999:2017,"-01-01")),
 
 ###two groups in x,two values####
 
-q <- interval_weighted_avg_f(x=a,y=b,interval_vars=c("start_date","end_date"),
-                        value_vars=c("value1","value2"),
-                        group_vars=c("id1","id2"))
+q1 <- interval_weighted_avg_f(x=a,
+                             y=b,
+                             interval_vars=c("start_date","end_date"),
+                             value_vars=c("value1","value2"),
+                             group_vars=c("id1","id2"))
+
+
+q2 <- interval_weighted_avg_slow_f(x=a,
+                                   y=b,
+                                   interval_vars=c("start_date","end_date"),
+                                   value_vars=c("value1","value2"),
+                                   group_vars=c("id1","id2"))
+
+
+all.equal(q1[,1:6],q2)
 
   #simple example:
-a <- CJ(id=1:2,id2=1:2,start=seq(1,50,by=7))
-a[, end:=start+6]
+a <- CJ(id=1:2,id2=1:2,start=seq(1L,50L,by=7L))
+a[, end:=start+6L]
 a[, value:=rbinom(nrow(a),5,prob=.5)]
 b <- data.table(start=seq(0,42,by=14))
-b[,end:=start+13]
+b[,end:=start+13L]
 
 
 q1 <- interval_weighted_avg_f(x=a,
@@ -37,9 +49,21 @@ q1 <- interval_weighted_avg_f(x=a,
 
 
 q2 <- interval_weighted_avg_slow_f(x=a,
-                             y=b,interval_vars=c("start","end"),
+                             y=b,
+                             interval_vars=c("start","end"),
                              group_vars=c("id","id2"),
                              value_vars=c("value"))
+
+all.equal(q1[,1:5],q2)
+
+
+###next steps: deal with missing values in x correctly such that the percentage function works in slow function
+#actually test missing values
+#combine the functions into one
+##y can be overlapping
+##y can have groups that match groups in x
+##y can have groups that match groups in x: partial overlap (ie more grouping vars in x than in y)
+#compare to sql functions!
 
 #no group, only 1 value ###
 
