@@ -1,9 +1,5 @@
-
 ##next steps:
-##y and x two matching groups. different averging periods in y depending on groups
-#two groups in x and one group in y
-##y can be overlapping
-#compare to sql functions!
+#compare to sql functions
 
 
 library(data.table)
@@ -61,8 +57,8 @@ a_start_date <- seq(structure(10590, class = "Date"),
 
 a0 <- CJ(id1=1:3,id2=1:100, start_date=a_start_date)
 a0[, end_date:=start_date+6]
-a0[, value1:=rnorm(nrow(a0))]
-a0[, value2:=rnorm(nrow(a0))]
+a0[, value1:=rnorm(.N)] 
+a0[, value2:=rnorm(.N)]
 
 b0 <- data.table(start_date=as.Date(paste0(1999:2017,"-01-01")),
                   end_date=as.Date(paste0(1999:2017,"-12-31")))
@@ -109,10 +105,10 @@ stopifnot(all.equal(q0_1,q0_2))
 
 a <- CJ(id=1:2,id2=1:2,start=c(-13L,seq(1L,36L,by=7L)))
 a[, end:=start+6L]
-a[, value:=rbinom(nrow(a),5,prob=.5)]
-a[, value2:=rbinom(nrow(a),5,prob=.5)]
+a[, value:=rbinom(.N,5,prob=.5)]
+a[, value2:=rbinom(.N,5,prob=.5)]
 #randomly insert some missing values in one column:
-a[as.logical(rbinom(nrow(a),1,prob=.3)), value:=NA]
+a[as.logical(rbinom(.N,1,prob=.3)), value:=NA]
 
 b <- data.table(start=seq(0L,56L,by=14L))
 b[,end:=start+13L]
@@ -157,8 +153,7 @@ stopifnot(all.equal(q1,q2))
 
 
 
-##averaging intervals shorter than observed period includes dates 
-#not in observed period at all ####
+##averaging intervals shorter than observed period & includes dates not in observed period at all ####
 b2 <- data.table(start=seq(0L,56L,by=3L))
 b2[,end:=start+2L]
 
@@ -213,23 +208,80 @@ q3_1 <- interval_weighted_avg_f(x=a,
                                 required_percentage = 50
 )
 
-stopifnot(all.equal(q3_1[id==1&id2==1],qm1[id==1&id2==1]))
-stopifnot(all.equal(q3_1[id==1&id2==2],q2_1[id==1&id2==2]))
 
-q3_2 <- interval_weighted_avg_slow_f(x=a2,
+q3_2 <- interval_weighted_avg_slow_f(x=a,
                                      y=b3,
                                      interval_vars=c("start","end"),
                                      group_vars=c("id","id2"),
                                      value_vars=c("value","value2"),
                                      required_percentage = 50
 )
+stopifnot(all.equal(q3_1[id==1&id2==1],qm1[id==1&id2==1]))
+stopifnot(all.equal(q3_1[id==1&id2==2],q2_1[id==1&id2==2]))
 
-all.equal(q3_1,q3_2)
+stopifnot(all.equal(q3_1,q3_2,check.attributes=FALSE))
 
 
-#irregular length observation periods that are not necessarily adjoining 
+#more groups in x than in y
+b4 <- copy(b3)
+b4[,id2:=NULL]
 
-#periods that have overlaps--this should return an error
+
+q4_1 <- interval_weighted_avg_f(x=a,
+                                y=b4,
+                                interval_vars=c("start","end"),
+                                group_vars=c("id","id2"),
+                                value_vars=c("value","value2"),
+                                required_percentage = 50
+)
+
+
+q4_2 <- interval_weighted_avg_slow_f(x=a,
+                                     y=b4,
+                                     interval_vars=c("start","end"),
+                                     group_vars=c("id","id2"),
+                                     value_vars=c("value","value2"),
+                                     required_percentage = 50
+)
+
+stopifnot(all.equal(q4_1,q4_2))
+
+
+#periods that have overlaps in y--this should work
+b_overlap <- rbind(b2,data.table(start=3L,end=18L))
+q_overlap_y1 <- interval_weighted_avg_f(x=a,
+                                y=b_overlap,
+                                interval_vars=c("start","end"),
+                                group_vars=c("id","id2"),
+                                value_vars=c("value","value2"),
+                                required_percentage = 50
+)
+
+
+q_overlap_y2 <- interval_weighted_avg_slow_f(x=a,
+                                     y=b_overlap,
+                                     interval_vars=c("start","end"),
+                                     group_vars=c("id","id2"),
+                                     value_vars=c("value","value2"),
+                                     required_percentage = 50
+)
+
+
+all.equal(q_overlap_y1,q_overlap_y2)
+
+#periods that have overlaps in x--this should return an error
+
+a_overlap <- CJ(id=1:2,id2=1:2,start=c(-13L,seq(1L,36L,by=7L),1L))
+a_overlap[, end:=start+6L]
+a_overlap[, value:=rbinom(.N,5,prob=.5)]
+
+stopifnot(tryCatch(
+  interval_weighted_avg_f(a_overlap,b,interval_vars=c("start","end"),
+                          value_vars=c("value"),
+                          group_vars=c("id","id2")),
+  error=function(x){TRUE}))
+
+
 
 #misspecified order of interval_vars should return an error:
 stopifnot(tryCatch(
