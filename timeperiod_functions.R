@@ -1,6 +1,16 @@
 library(data.table)
 
 
+create_unused_name <- function(x,reserved_cols){
+  for(i in 1:length(x)){
+    while(x[i] %in% reserved_cols){
+      x[i] <- paste0("i.",x[i])
+    }  
+  }
+  x
+}
+
+
 #a function to grid expand an arbitrary number of data.tables
 #largely based on https://github.com/lockedata/optiRum/blob/master/R/CJ.dt.R
 #groups is a character vector corresponding to column names of grouping vars  
@@ -30,6 +40,10 @@ CJ.dt <- function(...,groups=NULL) {
   })
   out[]
 }
+
+
+cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
+
 
 
 #function to take non-overlapping time-integrated averages observed over a defined period
@@ -401,22 +415,126 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
   out[]
 }
 
-remove_overlaps <- function(x){
-  x <- copy(x)
-  x[, g := c(0L, cumsum(shift(start, -1L) > cummax(end))[-.N]), by=.(id)]
+
+
+
+
+x_l <- melt(x)
+x_l[variable=="end",c("start","end"):=list(FALSE,TRUE)]
+x_l[variable=="start",c("start","end"):=list(TRUE,FALSE)]
+x_l <- x_l[order(value,end)]
+
+x_l[,open_intervals:=cumsum(start)-cumsum(end)]
+
+x_l[(start),open:=value]
+x_l[(!start),open:=value+1]
+x_l[,shift_start := shift(start,type="lead")]
+
+x_l[,close1:=shift(value,type="lead")]
+x_l[,close2:=pmax(close1-1,open)]
+
+x_l[shift(end,type="lead"),close:=close1]
+x_l[shift(start,type="lead"),close:=close2]
+
+
+
+x <- data.table(start=c(1,5,5),end=c(5,5,10),id1="1",id2="1")
+
+remove_overlaps0 <- function(x,interval_vars,group_vars,drop_gaps=TRUE){
+  EVAL <- function(...)eval(parse(text=paste0(...)))
   
-  #cut those intervals into non-overlapping ones
-  itvl <- x[, {
-    s <- sort(c(start - 1L, start, end, end + 1L))
-    as.data.table(matrix(s[s %between% c(min(start), max(end))], ncol=2L, byrow=TRUE))
-  }, by=.(id, g)]
+  xkey <- key(x)
   
-  #get OP's desired output using non-equi join
-  x[itvl, on=.(id, start<=V1, end>=V1),
-    .(id1=id, start1=V1, end1=V2, i.start1=x.start, i.end1=x.end, obs),
-    allow.cartesian=TRUE]
+  rowid_var <- create_unused_name("rowid",names(x))
+  open_intervals_var <- create_unused_name("open_intervals",names(x))
+  open_var <- create_unused_name("open",names(x))
+  close_var <- create_unused_name("close",names(x))
+  close1_var <- create_unused_name("close1",names(x))
+  close2_var <- create_unused_name("close2",names(x))
+  value_var <- create_unused_name("value",names(x))
+  variable_var <- create_unused_name("variable",names(x))
+  i.interval_vars <- create_unused_name(paste0("i.", interval_vars),"qq")  
   
+  #create a row id var so the results can be merged back to x
+  x[,(rowid_var):=.I]
+  
+  
+  x_l <- melt(x[,c(interval_vars,group_vars,rowid_var),with=FALSE],
+              id.vars=c(group_vars,rowid_var), measure.vars=interval_vars,
+              value.name=value_var)
+  EVAL("x_l[",variable_var,"==interval_vars[2],(interval_vars):=list(FALSE,TRUE)]")
+  EVAL("x_l[",variable_var,"==interval_vars[1],(interval_vars):=list(TRUE,FALSE)]")
+  x_l <- EVAL("x_l[order(",value_var,",",interval_vars[2],")]")
+  
+    #count the number of open intervals at the end of each row
+  EVAL("x_l[,",open_intervals_var,":=cumsum(",interval_vars[1],")-cumsum(",interval_vars[2],")]")
+  
+  EVAL("x_l[(",interval_vars[1],"),",open_var,":=",value_var,"]")
+  EVAL("x_l[(!",interval_vars[1],"),",open_var,":=",value_var,"+1]")
+  
+  EVAL("x_l[,shift_start := shift(",interval_vars[1],",type='lead')]")
+  
+  EVAL("x_l[,(close1_var):=shift(",value_var,",type='lead')]")
+  EVAL("x_l[,(close2_var):=pmax(",close1_var,"-1,",open_var,")]")
+  
+  EVAL("x_l[shift(",interval_vars[2],",type='lead'),",close_var,":=",close1_var,"]")
+  EVAL("x_l[shift(",interval_vars[1],",type='lead'),",close_var,":=",close2_var,"]")
+  
+  if(drop_gaps){
+    
+  }
+  
+  EVAL("x_l[order(",group_vars,",",interval_vars,")]")
+  
+  zz <- paste0(paste0("'",setdiff(names(x_l),c(rowid_var,open_var,close_var)),"'"),collapse=",")
+  EVAL("x_l[,c(",zz,"):=NULL]")
+  
+  setkeyv(x,rowid_var)
+  setkeyv(x_l,rowid_var)
+  
+  out <- x[x_l]
+  out[,(rowid_var):=NULL]
+  setnames(out, c(open_var,close_var), i.interval_vars)
+  setcolorder(out,c(group_vars,interval_vars,i.interval_vars))
+  
+  x[,(rowid_var):=NULL]
+  setkeyv(x,xkey)
+  out[]
 }
 
 
 
+
+
+remove_overlaps1 <- function(x,interval_vars,group_vars){
+  x <- copy(x)
+
+  
+  gvar <- create_unused_name("g",names(x))
+    
+  EVAL <- function(...)eval(parse(text=paste0(...)))
+  
+  EVAL("x[, ",gvar," := c(0L, cumsum(shift(",interval_vars[1],", -1L) > cummax(",
+       interval_vars[2],"))[-.N]), by=group_vars]")
+  
+  #cut those intervals into non-overlapping ones
+  itvl <- EVAL("x[, {
+    s <- sort(c(",interval_vars[1]," - 1L, ",interval_vars[1],", ",interval_vars[2],", ",interval_vars[2]," + 1L))
+    as.data.table(matrix(s[s %between% c(min(",interval_vars[1],"), max(",interval_vars[2],"))], ncol=2L, byrow=TRUE))
+  }, by=c(group_vars, gvar)]")
+  
+  i.interval_vars <- create_unused_name(paste0("i.", interval_vars),"qq") 
+  
+  for(i in 1:length(interval_vars))
+    while(any(i.interval_vars[i]%in%names(x))){
+      i.interval_vars[i] <- paste0("i.",i.interval_vars[i])
+    }
+  
+  #get OP's desired output using non-equi join
+  out <- EVAL("x[itvl, on=.(",group_vars,", ",interval_vars[1],"<=V1, ",interval_vars[2],">=V1),
+    .(",paste0(group_vars,collapse=","),", ",interval_vars[1],"=V1, ",interval_vars[2],"=V2, 
+    ",i.interval_vars[1],"=x.",interval_vars[1],", ",i.interval_vars[2],"=x.",interval_vars[2],"),allow.cartesian=TRUE]")
+  
+  setcolorder(out,c(group_vars,interval_vars,i.interval_vars))
+  out[]
+}

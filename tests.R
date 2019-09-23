@@ -8,6 +8,25 @@ source("timeperiod_functions.R")
 set.seed(180)
 
 
+x <- data.table(start=c(1,5,5),end=c(5,5,10),id1="1",id2="1")
+remove_overlaps1(x,interval_vars=c("start","end"),group_vars=c("id1","id2"))
+remove_overlaps0(x,interval_vars=c("start","end"),group_vars=c("id1","id2"))
+
+library(data.table)
+set.seed(1113)
+start1 <- c(1,7,9, 17, 18,1,3,20)
+end1 <- c(10,12,15, 20, 23,3,5,25)
+id1 <- c(1,1,1,1,1,2,2,2)
+obs <- rnorm(length(id1))
+x <- data.table(start1,end1,id1,obs)
+remove_overlaps0(x,interval_vars=c("start1","end1"),group_vars=c("id1"))
+remove_overlaps1(x,interval_vars=c("start1","end1"),group_vars=c("id1"))
+
+
+
+
+
+
 
 ##test CJ for data.tables
 
@@ -289,3 +308,23 @@ stopifnot(tryCatch(
                           value_vars=c("value1","value2"),
                           group_vars=c("id1","id2")),
   error=function(x){TRUE}))
+
+
+
+
+####
+a_overlap1 <- CJ(id1=1:3,id2=1:100, start_date=a_start_date)
+a_overlap1[, end_date:=start_date+10]
+a_overlap1[, value1:=rnorm(.N)] 
+a_overlap1[, value2:=rnorm(.N)]
+remove_overlaps(
+  x=a_overlap1,
+  interval_vars=c("start_date","end_date"),
+  group_vars=c("id1","id2")
+)
+
+
+
+cummax(a_start_date)
+
+cummax(c(3,2,10,2,3,11,8))
