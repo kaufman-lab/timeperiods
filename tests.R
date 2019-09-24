@@ -9,20 +9,43 @@ set.seed(180)
 
 
 x <- data.table(start=c(1,5,5),end=c(5,5,10),id1="1",id2="1")
-remove_overlaps1(x,interval_vars=c("start","end"),group_vars=c("id1","id2"))
-remove_overlaps0(x,interval_vars=c("start","end"),group_vars=c("id1","id2"))
-
-library(data.table)
-set.seed(1113)
-start1 <- c(1,7,9, 17, 18,1,3,20)
-end1 <- c(10,12,15, 20, 23,3,5,25)
-id1 <- c(1,1,1,1,1,2,2,2)
-obs <- rnorm(length(id1))
-x <- data.table(start1,end1,id1,obs)
-remove_overlaps0(x,interval_vars=c("start1","end1"),group_vars=c("id1"))
-remove_overlaps1(x,interval_vars=c("start1","end1"),group_vars=c("id1"))
+remove_overlaps(x,interval_vars=c("start","end"),group_vars=c("id1","id2"))
 
 
+
+n <- 1000
+x <- matrix(round(runif(n=n*2, 0,1000)),ncol=2)
+x <- as.data.table(t(apply(x,1,sort)))
+setnames(x,names(x),c("start","end"))
+x[, id1:=rbinom(n,3,prob=.3)]
+x[, id2:=rbinom(n,7,prob=.5)]
+setkey(x, id1,id2,start,end)
+
+xd <- remove_overlaps(x,interval_vars=c("start","end"),group_vars=c("id1","id2"))
+
+
+##check that the new intervals: the union of the new intervals need to span exactly the original intervals:
+xd[,{
+  x <- .SD[,list(v1=seq(start,end)),by=1:nrow(.SD)]$v1
+  x <- unique(sort(x))
+  stopifnot(min(x)==i.start)
+  stopifnot(max(x)==i.end)
+  stopifnot(all(diff(x)==1))
+  stopifnot(sum(duplicated(.SD))==0) #within original intervals and grouping variables, no duplicated new intervals
+},by=c("id1","id2", "i.start","i.end"),.SDcols=c("start","end")]
+
+
+x_l <- melt(x,id.vars=c("id1","id2"))
+x_l[,value2:=value]
+setkey(x_l, id1,id2,value,value2)
+setkey(xd, id1,id2,start,end)
+
+#make sure that *every* original start or end point in x is either a start or end point for the new start/end variables in xd, 
+ #if those original start/end dates overlap with the new start dates at all (within groups)
+#if value is between start and end but not exactly start or end, this means new start/end is missing a cut
+vr <- foverlaps(x_l,xd)
+
+vr[, stopifnot(value %in% c(start,end)),by=1:nrow(vr)]  
 
 
 
