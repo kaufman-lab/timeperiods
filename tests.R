@@ -93,6 +93,28 @@ stopifnot(identical(
 ))
 
 
+
+
+
+##averaging intervals where groups=NULL
+a0.0 <- data.table(start=seq(1L,100L,by=10L),value1=rnorm(10))
+a0.0[,end:=start+9L]
+b0.0 <- data.table(start=1L,end=25L)
+q0.01 <- interval_weighted_avg_f(x=a0.0,
+                                y=b0.0,
+                                interval_vars=c("start","end"),
+                                value_vars=c("value1"))
+
+
+q0.02 <- interval_weighted_avg_slow_f(x=a0.0,
+                                     y=b0.0,
+                                     interval_vars=c("start","end"),
+                                     value_vars=c("value1"))
+
+
+stopifnot(all.equal(q0.01,q0.02))
+
+
 #averaging intervals longer than observed period
 a_start_date <- seq(structure(10590, class = "Date"),
                     structure(17163, class = "Date"),by=7)

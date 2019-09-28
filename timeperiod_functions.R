@@ -362,13 +362,18 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
   #this will represent the desired output structure: 
   #for every combination of group_vars, have every time-interval in y
   
-  unique_id_list <- lapply(group_vars,function(r){
-    x[,logical(1),keyby=r][[r]]
-  })
-  names(unique_id_list) <- group_vars
-  unique_id_dt <- do.call(CJ,unique_id_list)
+  if(!is.null(group_vars)){
+    unique_id_list <- lapply(group_vars,function(r){
+      x[,logical(1),keyby=r][[r]]
+    })
+    names(unique_id_list) <- group_vars
+    unique_id_dt <- do.call(CJ,unique_id_list)
+    
+    y_expanded_complete <- CJ.dt(y_expanded,unique_id_dt,groups=group_vars_overlap)
+  }else{
+    y_expanded_complete <- y_expanded
+  }
   
-  y_expanded_complete <- CJ.dt(y_expanded,unique_id_dt,groups=group_vars_overlap)
   
   #if grouping variables *are* in y...?
   
@@ -406,8 +411,7 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
   for(i in 1:length(value_vars)){
     EVAL("out[100*",nobs_vars[i],"/",ydur,"< required_percentage,",value_vars[i],":=NA]")  
   }
-  
-  out <- EVAL("out[order(",group_vars,",",interval_vars,")]")
+
   setcolorder(out, c(group_vars,interval_vars,value_vars,ydur,xdur,nobs_vars))
   
   setkeyv(out,c(group_vars,interval_vars))
