@@ -16,27 +16,33 @@ create_unused_name <- function(x,reserved_cols){
 #in all of the data.tables
 CJ.dt <- function(...,groups=NULL) {
   l = list(...)
+  EVAL <- function(...)eval(parse(text=paste0(...)))
   if(any(sapply(l,nrow)==0)){stop("one or more data.tables have no rows")}
-  kvar <- "k"
+  
   
   #while kvar is in names of any of the data.tables, keep prepending i. to it until it's not
-  while(any(sapply(lapply(l,names),function(n){kvar%in%n}))){
-    kvar <- paste0("i.",kvar)
-  }
+  kvar <- create_unused_name("k",unlist(lapply(l,names)))
   
-  lapply(l,function(z){
-    z[,(kvar):=1]
-    setkeyv(z,c(kvar,groups))
-    NULL
-  })
+  invars <- create_unused_name(paste0("in",1:length(l)),
+                             unlist(lapply(l,names)))
+  
+  for(i in 1:length(l)){
+    l[[i]][,(kvar):=1]
+    l[[i]][,(invars[i]):=TRUE]
+    setkeyv(l[[i]],c(kvar,groups))
+  }
+
   mymerge = function(x,y) x[y, allow.cartesian = TRUE]
   out <- Reduce(mymerge,l)
   out[,(kvar):=NULL]
   
-  lapply(l,function(z){
-    z[,(kvar):=NULL]
-    NULL
-  })
+  for(i in 1:length(l)){
+    l[[i]][,(kvar):=NULL]
+    l[[i]][,(invars[i]):=NULL]
+  }
+  
+  out <- EVAL("out[",paste0(paste0("!is.na(",invars,")"),collapse="&"),"]")
+  out[,(invars):=NULL]
   out[]
 }
 
@@ -45,8 +51,8 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
 
 
 
-#function to take non-overlapping time-integrated averages observed over a defined period
-#and average those observations up (or down) to a specified schedule
+#function to take values over defined periods which are non-overlapping within individuals specified by group_vars
+#average those values up (or down) to a specified schedule
 #this schedule does not necessarily need to align to the periods
 
 #for example, take observations on the two-week scale over decades and 
@@ -71,12 +77,21 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
 #intervals specified in the columns corresponding to interval_vars
 
 
-#by default, the function ensures that periods are non-overlapping in x and y
-#this is slow, but is a necessary condition of this function
+#by default, the function ensures that periods are overlapping in x and y
+#this is slow, but is a necessary condition of this function 
 #if you're sure your intervals are non-overlapping you can skip this
 #check by specifying skip_overlap_check=TRUE
-#at a later time, this may work for overlapping values of y.
+#WARNING, it's possible skipping this check may result in a completely wrong, meaningless return value without error
 
+#overlapping values of y are fine.
+
+
+#required_percentage=100 basically means na.rm=TRUE
+#if that percentage is less than 100, then this will be the percentage of nonmissing observations 
+ #that need to exist in a period of y. if the percentage of nonmissing observations is less than required_percentage 
+ #then the value returned for that period is NA
+
+ #
 
 #Value
 #a data.table containing columns: interval_vars (from y) group_vars, value_vars (averaged to y intervals)
@@ -94,6 +109,15 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   EVAL <- function(...)eval(parse(text=paste0(...)))
   
   ###error checks:
+  
+  i.interval_vars <- paste0("i.", interval_vars)
+  if(any(i.interval_vars%in% names(x)) | any(i.interval_vars%in% names(y)) ){
+    stop("names(x) or names(y) contains columns ",paste0(interval_vars,collapse=" "),
+         " and at least one column named ",paste0(i.interval_vars,collapse=" "),". Columns named ",paste0(i.interval_vars,collapse=" "),
+         " cannot be present in x or y because they are reserved for use by foverlaps")
+  }
+  
+  
   
   if(x[,any(sapply(.SD,function(m){any(is.na(m))})) ,.SDcols=interval_vars]){
     stop("columns corresponding to interval_vars cannot be missing in x")
@@ -137,9 +161,19 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
          interval_vars must specify columns corresponding to increasing intervals")
   }
   
+
+  
+  #check for exact overlaps
+  if(sum(duplicated(x[,c(..group_vars,..interval_vars)]))!=0){
+    stop("sum(duplicated(x[,c(..group_vars,..interval_vars)]))!=0 is not TRUE. 
+         there are replicate/duplicate intervals within groups. 
+         If you wish to average these together, then do this first")
+  }
+  
   #set keys for testing if there are overlaps
   #groups do not need to be in x but they do need to be in y
   if(!skip_overlap_check){
+
     setkeyv(x,c(group_vars,interval_vars))
     
     #stop if there are overlapping periods within groups: 
@@ -244,7 +278,7 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   z[, (dur):=as.numeric(pmin( get(xinterval_vars[2]), get(interval_vars[2]))-
                           pmax(get(xinterval_vars[1]),get(interval_vars[1]))) + 1] 
   
-  #dur being missing corresponds to xinterval_vars being missing, from merging in nonmathes above
+  #dur being missing corresponds to xinterval_vars being missing, from merging in nonmatches above
   #the duration of overlap is zero, not missing.
   EVAL("z[is.na(",dur,"),",dur,":=0]")
   
@@ -280,19 +314,21 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   #but including them in the by argument ensures they get passed to the resulting q object
   q <- EVAL("z[,list(",tw_avg,"),by=c(group_vars,interval_vars,xdur,ydur,nobs_vars)]")
   
-  stopifnot(q[,all(xdur<=ydur)])
   
-  #remove averages with too few observations in period
+  stopifnot(EVAL("q[,all(",xdur,"<=",ydur,")]"))
+  
+    #remove averages with too few observations in period
   #e.g. q[100*nobs_value/yduration < required_percentage, nobs_value:=NA]
   for(i in 1:length(value_vars)){
     EVAL("q[100*",nobs_vars[i],"/",ydur,"< required_percentage,",value_vars[i],":=NA]")  
   }
   
-
+  
   setcolorder(q, c(group_vars,interval_vars,value_vars,ydur,xdur,nobs_vars))
   setkeyv(q,c(group_vars,interval_vars))
   q[]
   }
+
 
 
 #slower algorithm. used for error checking since this is the simpler approach and less likely to have errors.
@@ -301,6 +337,29 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
                                          required_percentage=100,skip_overlap_check=FALSE){
   
   EVAL <- function(...)eval(parse(text=paste0(...)))
+  
+  
+  #check for exact overlaps
+  if(sum(duplicated(x[,c(..group_vars,..interval_vars)]))!=0){
+    stop("sum(duplicated(x[,c(..group_vars,..interval_vars)]))!=0 is not TRUE. 
+         there are replicate/duplicate intervals within groups. 
+         If you wish to average these together, then do this first")
+  }
+  
+  #set keys for testing if there are overlaps
+  #groups do not need to be in x but they do need to be in y
+  if(!skip_overlap_check){
+    
+    setkeyv(x,c(group_vars,interval_vars))
+    
+    #stop if there are overlapping periods within groups: 
+    stopifnot(nrow(foverlaps(x,x))==nrow(x))  
+    print(paste(Sys.time(),"passed test to determine whether data is non-overlapping"))
+  }else{
+    print("Caution: skipping test to determine whether data is non-overlapping")
+  }
+  
+  
   
   group_vars_overlap <- intersect(group_vars,names(y)) 
   
@@ -402,11 +461,13 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
   avg_call <- paste0(value_vars,"=mean(",value_vars,",na.rm=TRUE)",collapse=",")
   paste0()
   nobs_call <- paste0(nobs_vars,"=sum(!is.na(",value_vars,"))",collapse=",")
-  ydur_call <- paste0(ydur,"=.N")
+  ydur_call <- paste0(ydur,"=length(unique(",t,"))")
   xdur_call <- paste0(xdur,"=sum(",measurement,",na.rm=TRUE)")
   
   out <- EVAL("z[,","list(",avg_call,",",ydur_call,",",xdur_call,",",nobs_call,")" ,
               ",by=c(interval_vars,group_vars)]")
+  
+  stopifnot(EVAL("out[,all(",xdur,"<=",ydur,")]"))
   
   for(i in 1:length(value_vars)){
     EVAL("out[100*",nobs_vars[i],"/",ydur,"< required_percentage,",value_vars[i],":=NA]")  
@@ -418,14 +479,23 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
   out[]
 }
 
+
+#value, returns the new intervals along with the old intervals with column names paste("o.",interval_vars) o is for "original"
 remove_overlaps <- function(x,interval_vars,group_vars=NULL){
   EVAL <- function(...)eval(parse(text=paste0(...)))
+  
   
   
   xkey <- key(x)
   
   variable_var <- create_unused_name("variable",names(x))
-  i.interval_vars <- create_unused_name(paste0("i.", interval_vars),names(x))  
+  i.interval_vars <- paste0("i.", interval_vars)
+    if(any(i.interval_vars%in% names(x))){
+      stop("names(x) contains columns ",paste0(interval_vars,collapse=" "),
+      " and at least one column named ",paste0(i.interval_vars,collapse=" "),". Columns named ",paste0(i.interval_vars,collapse=" "),
+      " cannot be present in x because they are reserved for use by foverlaps")
+      }
+  
   value_var <- create_unused_name("value",names(x))
   open_var <- create_unused_name("open",names(x))
   close_var <- create_unused_name("close",names(x))
@@ -469,6 +539,7 @@ remove_overlaps <- function(x,interval_vars,group_vars=NULL){
                    paste0("i.",interval_vars),
                    interval_vars))
   setcolorder(out, c(group_vars,interval_vars,paste0("i.",interval_vars)))
+  setnames(out, i.interval_vars, paste0("o.",interval_vars))
   
   setkeyv(x, xkey)
   out

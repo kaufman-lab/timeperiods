@@ -1,12 +1,14 @@
 ##next steps:
 #compare to sql functions
 
-
+rm(list=ls())
 library(data.table)
 source("timeperiod_functions.R")
 
 set.seed(180)
 
+
+### test remove_overlaps####
 
 x <- data.table(start=c(1,5,5),end=c(5,5,10),id1="1",id2="1")
 remove_overlaps(x,interval_vars=c("start","end"),group_vars=c("id1","id2"))
@@ -28,11 +30,11 @@ xd <- remove_overlaps(x,interval_vars=c("start","end"),group_vars=c("id1","id2")
 xd[,{
   x <- .SD[,list(v1=seq(start,end)),by=1:nrow(.SD)]$v1
   x <- unique(sort(x))
-  stopifnot(min(x)==i.start)
-  stopifnot(max(x)==i.end)
+  stopifnot(min(x)==o.start)
+  stopifnot(max(x)==o.end)
   stopifnot(all(diff(x)==1))
   stopifnot(sum(duplicated(.SD))==0) #within original intervals and grouping variables, no duplicated new intervals
-},by=c("id1","id2", "i.start","i.end"),.SDcols=c("start","end")]
+},by=c("id1","id2", "o.start","o.end"),.SDcols=c("start","end")]
 
 
 x_l <- melt(x,id.vars=c("id1","id2"))
@@ -51,7 +53,7 @@ vr[, stopifnot(value %in% c(start,end)),by=1:nrow(vr)]
 
 
 
-##test CJ for data.tables
+#####test CJ.dt for data.tables ####
 
 X <- data.table(x1=1:2,x2=2:3)
 Y <- data.table(y1=4:6,y2=5:7)
@@ -92,6 +94,34 @@ stopifnot(identical(
   rbindlist(templ)
 ))
 
+X <- data.table(
+  x1 = 1,
+  x2 = 2,
+  id1 = 1,
+  id2 = 1
+)
+Y <- data.table(
+  y1 = 4:11,
+  y2 = 5:12,
+  id1 = rep(1:2, each = 2),
+  id2 = rep(1:2, times = 2)
+)
+
+
+templ <- list()
+counter <- 1
+for(i in unique(X$id1)){
+  for(j in unique(X$id2)){
+    templ[[counter]] <- CJ.dt(X[id1==i&id2==j],Y[id1==i&id2==j,list(y1,y2)])
+    counter <- counter +1
+  }
+}
+stopifnot(identical(
+  CJ.dt(X,Y,groups=c("id1","id2")), 
+  rbindlist(templ)
+))
+
+####test averaging function #########
 
 
 
@@ -333,9 +363,9 @@ q_overlap_y2 <- interval_weighted_avg_slow_f(x=a,
 
 all.equal(q_overlap_y1,q_overlap_y2)
 
-#periods that have overlaps in x--this should return an error
+#periods that have partial overlaps in x--this should return an error
 
-a_overlap <- CJ(id=1:2,id2=1:2,start=c(-13L,seq(1L,36L,by=7L),1L))
+a_overlap <- CJ(id=1:2,id2=1:2,start=c(-13L,seq(1L,36L,by=7L),2L))
 a_overlap[, end:=start+6L]
 a_overlap[, value:=rbinom(.N,5,prob=.5)]
 
@@ -347,6 +377,22 @@ stopifnot(tryCatch(
 
 
 
+
+##periods that have exact overlaps but no partial overlaps--this return error##
+a_exact_overlap <- data.table(start_date=c(1L,1L,4L),end_date=c(3L,3L,10L),value1=c(0,5,10))
+b_exact_overlap <- data.table(start_date=2L:3L,end_date=8L:9L)
+
+stopifnot(
+  tryCatch(interval_weighted_avg_f(a_exact_overlap,b_exact_overlap,interval_vars=c("start_date","end_date"),
+                                   value_vars=c("value1")),error=function(x){TRUE})
+)
+     
+stopifnot(
+  tryCatch(interval_weighted_avg_slow_f(a_exact_overlap,b_exact_overlap,interval_vars=c("start_date","end_date"),
+                                   value_vars=c("value1")),error=function(x){TRUE})
+)
+
+
 #misspecified order of interval_vars should return an error:
 stopifnot(tryCatch(
   interval_weighted_avg_f(a,b,interval_vars=c("end_date","start_date"),
@@ -356,14 +402,96 @@ stopifnot(tryCatch(
 
 
 
+##make sure remove_overlaps throws an error when "i." variables are provided
+a_overlap1 <- CJ(id1=1:3,id2=1:100, start_date=a_start_date)
+a_overlap1[, end_date:=start_date+10]
+a_overlap1[, i.start_date:=TRUE]
+stopifnot(tryCatch(
+  remove_overlaps(
+    x=a_overlap1,
+    interval_vars=c("start_date","end_date"),
+    group_vars=c("id1","id2")
+  ),
+  error=function(x){TRUE}))
 
-####
+
+####realistic example with overlaping values: deoverlap them then average to a period:
 a_overlap1 <- CJ(id1=1:3,id2=1:100, start_date=a_start_date)
 a_overlap1[, end_date:=start_date+10]
 a_overlap1[, value1:=rnorm(.N)] 
 a_overlap1[, value2:=rnorm(.N)]
-remove_overlaps(
+a_overlap1_removed <- remove_overlaps(
   x=a_overlap1,
   interval_vars=c("start_date","end_date"),
   group_vars=c("id1","id2")
 )
+
+#average duplicate intervals together
+a_overlap1_removed <- 
+  a_overlap1_removed[,list(value1=mean(value1),value2=mean(value2)),by=list(id1,id2,start_date,end_date)]
+
+#insert missingness
+a_overlap1_removed[sample(1:nrow(a_overlap1_removed),size=floor(.2*nrow(a_overlap1_removed))),`:=`(value1=NA,value2=NA)]
+
+
+b_overlap1 <- CJ(id1=1:3,id2=1:100)[,
+                                    rep(TRUE,sample(1:10,size=1)),
+                                    by=list(id1,id2)]
+b_overlap1[, start_date:=sample(a_start_date,nrow(b_overlap1),replace=TRUE)+sample(-5L:5L,nrow(b_overlap1),replace=TRUE)]
+b_overlap1[, end_date:=start_date+sample(0:10,nrow(b_overlap1),replace=TRUE)]
+
+
+
+
+system.time(realistic1 <-   interval_weighted_avg_f(x=a_overlap1_removed,b_overlap1,interval_vars=c("start_date","end_date"),
+                          value_vars=c("value1","value2"),
+                          group_vars=c("id1","id2"),
+                          skip_overlap_check=FALSE))
+  
+system.time(realistic2 <-   interval_weighted_avg_slow_f(a_overlap1_removed,b_overlap1,interval_vars=c("start_date","end_date"),
+                          value_vars=c("value1","value2"),
+                          group_vars=c("id1","id2"),
+                          skip_overlap_check=FALSE))
+  
+stopifnot(all.equal(realistic1,realistic2))
+
+
+
+
+##more realism
+n <- 100
+x <- matrix(as.integer(round(runif(n=n*2, 0,1000))),ncol=2)
+x <- as.data.table(t(apply(x,1,sort)))
+setnames(x,names(x),c("start","end"))
+x[, id1:=rbinom(n,3,prob=.3)]
+x[, id2:=rbinom(n,7,prob=.5)]
+x[,value1:=rnorm(n)]
+x[,value2:=rnorm(n)]
+setkey(x, id1,id2,start,end)
+
+a <- remove_overlaps(x,interval_vars=c("start","end"),group_vars=c("id1","id2"))
+#average duplicate intervals together
+a <- 
+  a[,list(value1=mean(value1),value2=mean(value2)),by=list(id1,id2,start,end)]
+
+#insert missingness
+a[sample(1:nrow(a),size=floor(.2*nrow(a))),`:=`(value1=NA,value2=NA)]
+
+b <- matrix(as.integer(round(runif(n=n*2, 0L,1000L))),ncol=2)
+b <- as.data.table(t(apply(b,1,sort)))
+setnames(b,names(b),c("start","end"))
+b[, id1:=rbinom(n,3,prob=.3)]
+b[, id2:=rbinom(n,7,prob=.5)]
+
+
+
+system.time(zzz1 <- interval_weighted_avg_f(a,b,interval_vars=c("start","end"),value_vars=c("value1","value2"),
+                                           group_vars=c("id1","id2"),
+                                           skip_overlap_check=FALSE))
+
+system.time(zzz2 <- interval_weighted_avg_f(a,b,interval_vars=c("start","end"),value_vars=c("value1","value2"),
+                                            group_vars=c("id1","id2"),
+                                            skip_overlap_check=FALSE))
+
+stopifnot(all.equal(zzz1,zzz2))
+
