@@ -345,9 +345,3 @@ remove_overlaps(
   interval_vars=c("start_date","end_date"),
   group_vars=c("id1","id2")
 )
-
-
-
-cummax(a_start_date)
-
-cummax(c(3,2,10,2,3,11,8))

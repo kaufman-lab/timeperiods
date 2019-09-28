@@ -1,6 +1,5 @@
 library(data.table)
 
-
 create_unused_name <- function(x,reserved_cols){
   for(i in 1:length(x)){
     while(x[i] %in% reserved_cols){
@@ -289,10 +288,9 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     EVAL("q[100*",nobs_vars[i],"/",ydur,"< required_percentage,",value_vars[i],":=NA]")  
   }
   
-  
-  #reorder rows and set column order
-  q <- EVAL("q[order(",group_vars,",",interval_vars,")]")
+
   setcolorder(q, c(group_vars,interval_vars,value_vars,ydur,xdur,nobs_vars))
+  setkeyv(q,c(group_vars,interval_vars))
   q[]
   }
 
@@ -409,10 +407,10 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
     EVAL("out[100*",nobs_vars[i],"/",ydur,"< required_percentage,",value_vars[i],":=NA]")  
   }
   
-  setkeyv(out,c(group_vars,interval_vars))
   out <- EVAL("out[order(",group_vars,",",interval_vars,")]")
   setcolorder(out, c(group_vars,interval_vars,value_vars,ydur,xdur,nobs_vars))
   
+  setkeyv(out,c(group_vars,interval_vars))
   out[]
 }
 
@@ -447,16 +445,20 @@ remove_overlaps <- function(x,interval_vars,group_vars=NULL){
   EVAL("xd[,(end_next_var):=shift(",is_end_var,",type='lead'),by=group_vars]")
   EVAL("xd[,(value_next_var):=shift(",value_var,",type='lead'),by=group_vars]")
   
-  #the last row is missing because you can't shift
+  #the last row is missing because you can't get the next row when there aren't any more rows!
+   #we don't need that row where end_next is missing so exclude it.
+  #when data.table veresion 1.12.3 you can use fifelse to avoid coercing dates to numeric
+  #in the mean time use dplyr if_else
   temp <- EVAL("xd[,.SD[!is.na(",end_next_var,"),list(
-   ",interval_vars[1],"=ifelse(!",is_end_var,",",value_var,",",value_var,"+1L),
-    ",interval_vars[2],"=ifelse(!",end_next_var,",",value_next_var,"-1L,",value_next_var,")
+   ",interval_vars[1],"=dplyr::if_else(!",is_end_var,",",value_var,",",value_var,"+1L),
+    ",interval_vars[2],"=dplyr::if_else(!",end_next_var,",",value_next_var,"-1L,",value_next_var,")
   )],by=group_vars]")
   
   temp <- EVAL("temp[",interval_vars[2],">=",interval_vars[1],"]") 
 
   
   setkeyv(temp,c(group_vars,interval_vars))
+  if(!is.null(key(x))) setkeyv(x,c(group_vars,interval_vars))
   
   out <- foverlaps(x,temp)
   setorderv(out, c(group_vars,
