@@ -459,7 +459,7 @@ stopifnot(all.equal(realistic1,realistic2))
 
 
 ##more realism
-n <- 1000
+n <- 1e5
 x <- matrix(as.integer(round(runif(n=n*2, 0,1000))),ncol=2)
 x <- as.data.table(t(apply(x,1,sort)))
 setnames(x,names(x),c("start","end"))
