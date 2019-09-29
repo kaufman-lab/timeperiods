@@ -485,13 +485,42 @@ b[, id2:=rbinom(n,7,prob=.5)]
 
 
 
-system.time(zzz1 <- interval_weighted_avg_f(a,b,interval_vars=c("start","end"),value_vars=c("value1","value2"),
+zzz1 <- interval_weighted_avg_f(a,b,interval_vars=c("start","end"),value_vars=c("value1","value2"),
                                            group_vars=c("id1","id2"),
-                                           skip_overlap_check=FALSE))
+                                           skip_overlap_check=FALSE)
 
-system.time(zzz2 <- interval_weighted_avg_f(a,b,interval_vars=c("start","end"),value_vars=c("value1","value2"),
+zzz2 <- interval_weighted_avg_f(a,b,interval_vars=c("start","end"),value_vars=c("value1","value2"),
                                             group_vars=c("id1","id2"),
-                                            skip_overlap_check=FALSE))
+                                            skip_overlap_check=FALSE)
 
 stopifnot(all.equal(zzz1,zzz2))
 
+
+
+
+####large dataset that's non-overlapping: for timing comparison
+if(FALSE){
+az_start_date <- seq(structure(0, class = "Date"),
+                    structure(1e6, class = "Date"),by=14)
+
+az <- CJ(id1=1:100, start_date=az_start_date)
+az[, end_date:=start_date+13]
+az[, value1:=rnorm(.N)] 
+az[, value2:=rnorm(.N)]
+
+bz_start_date <- seq(structure(2, class = "Date"),
+                    structure(1e6, class = "Date"),by=7)
+
+bz <- CJ(id1=1:100, start_date=bz_start_date)
+bz[, end_date:=start_date+6]
+
+zzbig1 <- interval_weighted_avg_f(az,bz,interval_vars=c("start_date","end_date"),
+                                  value_vars=c("value1","value2"),
+                                group_vars="id1",
+                                skip_overlap_check=TRUE)
+
+zzbig2 <- interval_weighted_avg_slow_f(az,bz,interval_vars=c("start_date","end_date"),
+                                  value_vars=c("value1","value2"),
+                                  group_vars="id1",
+                                  skip_overlap_check=TRUE)
+}
