@@ -106,18 +106,46 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
 
 interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NULL,
                                     required_percentage=100,skip_overlap_check=FALSE){
-  EVAL <- function(...)eval(parse(text=paste0(...)))
+
+    ###Variable names: reserved (these will be in the return data.table)
   
-  ###error checks:
-  
-  i.interval_vars <- paste0("i.", interval_vars)
-  if(any(i.interval_vars%in% names(x)) | any(i.interval_vars%in% names(y)) ){
+  xinterval_vars <- paste0("i.",interval_vars)
+  #columns that will be named by foverlaps
+  ##the ones prefixed with i. are from x 
+  if(any(xinterval_vars%in% names(x)) | any(xinterval_vars%in% names(y)) ){
     stop("names(x) or names(y) contains columns ",paste0(interval_vars,collapse=" "),
-         " and at least one column named ",paste0(i.interval_vars,collapse=" "),". Columns named ",paste0(i.interval_vars,collapse=" "),
-         " cannot be present in x or y because they are reserved for use by foverlaps")
+         " and at least one column named ",paste0(xinterval_vars,collapse=" "),". Columns named ",paste0(xinterval_vars,collapse=" "),
+         " cannot be present in x or y because they are reserved for use by foverlaps. please rename this/these column(s).")
+  }
+
+  if("yduration"%in%names(x)|"yduration"%in%names(y)){
+    stop("names(x) or names(y) contains the column name 'yduration'. A column named 'yduration' cannot be present in x or y 
+         because it will be a special column in the return value. please rename this column.")
   }
   
+  if("xduration"%in%names(x)|"xduration"%in%names(y)){
+    stop("names(x) or names(y) contains the column name 'xduration'. A column named 'xduration' cannot be present in x or y 
+         because it will be a special column in the return value. please rename this column.")
+  }
   
+  ###nonreserved variable names--temporary variables that can be named anything and but shouldn't conflict with existing varnames:
+  
+  
+  
+  #create a length-1 character vector that will be a column name in x,y, and z that is not in use already
+  
+  dur <- create_unused_name("duration",c(names(x),names(y)))
+  
+  #temp nobs vars will be the count (number) of non-missing obs for each row resulting from the foverlaps merge
+  
+  temp_nobs_vars <- create_unused_name(paste("temp_nobs",value_vars, sep="_"), c(names(x),names(y)))
+  
+  
+  #nobs vars will be the count of non-missing obs for each time-period in y (ie, summed from temp nobs)
+  nobs_vars <- create_unused_name(paste("nobs",value_vars, sep="_"), c(names(x),names(y)))
+
+  
+  ##error checking:
   
   if(x[,any(sapply(.SD,function(m){any(is.na(m))})) ,.SDcols=interval_vars]){
     stop("columns corresponding to interval_vars cannot be missing in x")
@@ -152,7 +180,6 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     }
   }
   
-  print("test")
   
   #stop if start_dates are before end dats
   if(x[, sum(.SD[[2]]-.SD[[1]] <0)!=0,.SDcols=interval_vars]){
@@ -160,8 +187,6 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
          less than corresponding values in  x[[interval_vars[2] ]]. 
          interval_vars must specify columns corresponding to increasing intervals")
   }
-  
-
   
   #check for exact overlaps
   if(sum(duplicated(x[,c(..group_vars,..interval_vars)]))!=0){
@@ -178,65 +203,17 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     
     #stop if there are overlapping periods within groups: 
     stopifnot(nrow(foverlaps(x,x))==nrow(x))  
-    print(paste(Sys.time(),"passed test to determine whether data is non-overlapping"))
+    print(paste(Sys.time(),"passed errorcheck: x is non-overlapping."))
   }else{
-    print("Caution: skipping test to determine whether data is non-overlapping")
+    print("Caution: skipping errorcheck. if data x is overlapping, incorrect results may be returned without error.")
   }
-  
-  
-  #create column names for variables that will be created in this function
-  #create a character vector representing the 
-  #second set of column names for start and end that will be created  
-  #once x and y are merged via foverlaps
-  #the ones prefixed with i. are from x 
-  xinterval_vars <- paste0("i.",interval_vars)
-  
-  #create a length-1 character vector that will be a column name in x,y, and z that is not in use already
-  dur <- "duration"
-  while(dur%in% names(x)|dur%in% names(y)){
-    dur <- paste0(".",dur)
-  }
-  #create a length-1 character vector that will be a column name in x,y, and z that is not in use already
-  xdur <- "xduration"
-  while(xdur%in% names(x)|xdur%in% names(y)){
-    xdur <- paste0("i.",xdur)
-  }
-  
-  #create a length-1 character vector that will be a column name in x,y, and z that is not in use already
-  ydur <- "yduration"
-  while(ydur%in% names(x)|ydur%in% names(y)){
-    ydur <- paste0("i.",ydur)
-  }
-  
-  #note that dur and xdur are used for calculating time-weighted averging
-  
-  #but for each value variable, the number of non-missing days also needs to counted separately:
-  #create a character vector (the length of value_vars) that will be column names in x,y, and z that are not in use already
-  
-  #temp nobs vars will be the count (number) of non-missing obs for each row resulting from the foverlaps merge
-  temp_nobs_vars <- paste("temp_nobs",value_vars, sep="_")
-  for(i in 1:length(temp_nobs_vars)){
-    while(temp_nobs_vars[i]%in% names(x)|temp_nobs_vars[i]%in% names(y)){
-      ydur <- paste0("i.",temp_nobs_vars[i])
-    }
-  }
-  
-  #nobs vars will be the count of non-missing obs for each time-period in y (ie, summed from temp nobs)
-  nobs_vars <- paste("nobs",value_vars, sep="_")
-  for(i in 1:length(nobs_vars)){
-    while(nobs_vars[i]%in% names(x)|nobs_vars[i]%in% names(y)){
-      ydur <- paste0("i.",nobs_vars[i])
-    }
-  }
-  
   
   #make a copy of y so a new column doesn't get created in the user's data.table
   y <- copy(y)
   
   #count length of each interval,
   #this will be used to count percentage of observed time x has in intervals of y
-  
-  y[,(ydur):=as.numeric( (get(interval_vars[2])-get(interval_vars[1])) + 1)]
+  y[,yduration:=as.numeric( (get(interval_vars[2])-get(interval_vars[1])) + 1)]
   
   ### merge x and y ####
   #group variables in x AND y. (group_vars are known to be in x from an error check above)
@@ -273,58 +250,68 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     z <- rbindlist(list(z,non_joins),fill=TRUE)
   } 
   
-  #calucate the dur of the overlap:
-  #the first of the two end dates minus the second of the two start dates plus one
-  z[, (dur):=as.numeric(pmin( get(xinterval_vars[2]), get(interval_vars[2]))-
-                          pmax(get(xinterval_vars[1]),get(interval_vars[1]))) + 1] 
+  #z has rows for every period in x
+  #z needs to be collapsed to sums and averages according to intervals in y
+  #start by taking the row-wise length (duration) of the overlapping period in each row
+  
+  
+  z[, (dur):=as.integer(pmin( get(xinterval_vars[2]), get(interval_vars[2]))-
+                          pmax(get(xinterval_vars[1]),get(interval_vars[1]))) + 1L] 
   
   #dur being missing corresponds to xinterval_vars being missing, from merging in nonmatches above
   #the duration of overlap is zero, not missing.
-  EVAL("z[is.na(",dur,"),",dur,":=0]")
+  z[is.na(get(dur)),(dur):=0]
   
-  #if value_var is missing for a row, then number of observations in this period is 0
-  #otherwise, nobs is the length of the period
+  #count the number of observations for each value_var
+  #if the value_var is missing for this row, then the number of observations of that value in the period is zero
+  #otherwise the number of observations is the length of the period
   for(i in 1:length(temp_nobs_vars)){
-    tmp <- EVAL("z[,is.na(",value_vars[i],")]")
-    EVAL("z[tmp,",temp_nobs_vars[i],":=0]")
-    EVAL("z[!tmp,",temp_nobs_vars[i],":=",dur,",]")
+    tmp <- is.na(z[[value_vars[i]]])
+    set(z,j=temp_nobs_vars[i],value=0L)
+    set(z,i=which(!tmp),j=temp_nobs_vars[i],value=z[[dur]][!tmp])
   }
   
-  
-  #define xdur as the sum of durations over y intervals
-  #keying by interval_vars should be the same as keying by interval_vars[1]
-  #since there are assumed to be no duplicates in intervals in y within categories of group_vars
+
   setkeyv(z,c(group_vars,interval_vars)) 
-  z[,(xdur):= sum(get(dur)),by=c(group_vars,interval_vars) ]
+  q <- z[,{
+    
+    #xdur will be the total summed length of all x intervals that overlap with a given y interval
+    #note that this is all in giant by statement so this is within unique values of "interval_vars"
+    #which are the y intervals
+    xduration <- sum(get(dur)) 
+    
+    nobs_l <- list()
+    value_l <- list()
+    for(i in 1:length(value_vars)){
+      
+      #sum the number of obs over y intervals
+      nobs_l[[nobs_vars[i]]] <- sum(get(temp_nobs_vars[i]))
+      
+      #take time-weighted averages over all value_vars 
+      #we could just as well use the variable-specific n_obs_expanded instead of duration_expanded as the product
+      #but n_obs_expanded are the same as duration_expanded except when value_vars is NA 
+      #in which case it's removed from the sum
+      value_l[[ value_vars[i] ]] <- sum(get(value_vars[i])*get(dur),na.rm=TRUE)/nobs_l[[i]]
+    }
   
-  #define nobs as the number of nobs over y intervals
-  for(i in 1:length(temp_nobs_vars)){
-    z[,(nobs_vars[i]):= sum(get(temp_nobs_vars[i])),by=c(group_vars,interval_vars) ]  
-  }
+    c(
+      list("xduration"=xduration,"yduration"=yduration[1]),
+      nobs_l,
+      value_l
+      )
+  },by=c(group_vars,interval_vars)]
   
-  #time weighted averaging:
-  #for all value vars, calculate time-weighted mean
-  
-  
-  #time-weighted average:
-  #ie sum(value1*duration)/xduration, sum(value2*duration)/xduration
-  tw_avg <- paste0(value_vars,"=sum(",value_vars,"*",dur, ",na.rm=TRUE)/",nobs_vars,collapse=",")
-  #xdur and ydur, and nobs_vars  provide no additional grouping here 
-  #since they were created as a single value within cateogires of interval_vars and group_vars
-  #but including them in the by argument ensures they get passed to the resulting q object
-  q <- EVAL("z[,list(",tw_avg,"),by=c(group_vars,interval_vars,xdur,ydur,nobs_vars)]")
-  
-  
-  stopifnot(EVAL("q[,all(",xdur,"<=",ydur,")]"))
+  stopifnot(q[,all(xduration<=yduration)])
+
   
     #remove averages with too few observations in period
   #e.g. q[100*nobs_value/yduration < required_percentage, nobs_value:=NA]
   for(i in 1:length(value_vars)){
-    EVAL("q[100*",nobs_vars[i],"/",ydur,"< required_percentage,",value_vars[i],":=NA]")  
+    q[100*get(nobs_vars[i])/yduration < required_percentage, value_vars[i]:=NA]
   }
   
   
-  setcolorder(q, c(group_vars,interval_vars,value_vars,ydur,xdur,nobs_vars))
+  setcolorder(q, c(group_vars,interval_vars,value_vars,"yduration","xduration",nobs_vars))
   setkeyv(q,c(group_vars,interval_vars))
   q[]
   }
@@ -354,39 +341,33 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
     
     #stop if there are overlapping periods within groups: 
     stopifnot(nrow(foverlaps(x,x))==nrow(x))  
-    print(paste(Sys.time(),"passed test to determine whether data is non-overlapping"))
+    print(paste(Sys.time(),"passed errorcheck: x is non-overlapping."))
   }else{
-    print("Caution: skipping test to determine whether data is non-overlapping")
+    print("Caution: skipping errorcheck. if data x is overlapping, incorrect results may be returned without error.")
   }
-  
-  
   
   group_vars_overlap <- intersect(group_vars,names(y)) 
   
   #create a length-1 character vector that will be a column name in x,y, and z that is not in use already
-  t <- "time"
-  while(t %in% names(x)|t%in%names(y)){
-    t <- paste0("i.",t)
-  }
+  t <- create_unused_name("time",c(names(x),names(y)))
   
   #create a length-1 character vector that will be a column name in x,y, and z that is not in use already
   # measurement occured on this day but it might be measured as missing
-  measurement <- "meas"
-  while(measurement%in% names(x)|measurement%in% names(y)){
-    measurement <- paste0("i.",measurement)
+  measurement <- create_unused_name("meas",c(names(x),names(y)))
+  
+  
+  
+  if("yduration"%in%names(x)|"yduration"%in%names(y)){
+    stop("names(x) or names(y) contains the column name 'yduration'. A column named 'yduration' cannot be present in x or y 
+         because it will be a special column in the return value. please rename this column.")
   }
-  
-  
-  #create a length-1 character vector that will be a column name in x,y, and z that is not in use already
-  xdur <- "xduration"
-  while(xdur%in% names(x)|xdur%in% names(y)){
-    xdur <- paste0("i.",xdur)
-  }
-  
   ydur <- "yduration"
-  while(ydur%in% names(x)|ydur%in% names(y)){
-    ydur <- paste0("i.",ydur)
+  
+  if("xduration"%in%names(x)|"xduration"%in%names(y)){
+    stop("names(x) or names(y) contains the column name 'xduration'. A column named 'xduration' cannot be present in x or y 
+         because it will be a special column in the return value. please rename this column.")
   }
+  xdur <- "xduration"
   
   
   #nobs vars will be the count of non-missing obs for each time-period in y 
