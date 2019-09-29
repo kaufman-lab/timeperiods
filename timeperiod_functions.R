@@ -195,11 +195,11 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
          If you wish to average these together, then do this first")
   }
   
-  group_vars_overlap <- intersect(group_vars,names(y)) 
+  group_vars_y <- intersect(group_vars,names(y)) 
   
-  ydups <- duplicated(y[,c(..group_vars_overlap,..interval_vars)])
+  ydups <- duplicated(y[,c(..group_vars_y,..interval_vars)])
   if(sum(ydups)!=0){
-    warning("sum(duplicated(y[,c(..group_vars_overlap,..interval_vars)]))!=0 is not TRUE. 
+    warning("sum(duplicated(y[,c(..group_vars_y,..interval_vars)]))!=0 is not TRUE. 
          there are replicate/duplicate intervals within groups of y. 
          removing these duplicated rows automatically")
     y <- y[!ydups]
@@ -228,9 +228,9 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   y[,yduration:=as.numeric( (get(interval_vars[2])-get(interval_vars[1])) + 1)]
   
   ### merge x and y ####
-  #group_vars_overlap are group variables in x AND y. (group_vars are known to be in x from an error check above)
-  setkeyv(y,c(group_vars_overlap, interval_vars))
-  setkeyv(x,c(group_vars_overlap, interval_vars))
+  #group_vars_y are group variables in x AND y. (group_vars are known to be in x from an error check above)
+  setkeyv(y,c(group_vars_y, interval_vars))
+  setkeyv(x,c(group_vars_y, interval_vars))
   z <- foverlaps(x,y,nomatch=NULL)  
   
   #nomatch=NULL here means intervals in x that don't match to y are dropped
@@ -240,8 +240,8 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   #afaik, foverlaps has no way of producing these 
   
   #get intervals in y that were not joined to x
-  setkeyv(y,c(group_vars_overlap, interval_vars))
-  setkeyv(z,c(group_vars_overlap, interval_vars))
+  setkeyv(y,c(group_vars_y, interval_vars))
+  setkeyv(z,c(group_vars_y, interval_vars))
   non_joins <- y[!z] #data.table idiomatically: return y subsetted to rows of "not z"
   #that is, return rows of y that don't match to z
   if(nrow(non_joins)>0){
@@ -254,7 +254,7 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     
     #if there are no group_vars in y just grid expand the two data.tables together
     
-    non_joins <- CJ.dt(non_joins,q,groups=group_vars_overlap)
+    non_joins <- CJ.dt(non_joins,q,groups=group_vars_y)
     
     ##add in intervals in y that weren't matched to intervals in x 
     #separately for each combination of groups
@@ -344,11 +344,11 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
          If you wish to average these together, then do this first")
   }
   
-  group_vars_overlap <- intersect(group_vars,names(y)) 
+  group_vars_y <- intersect(group_vars,names(y)) 
   
-  ydups <- duplicated(y[,c(..group_vars_overlap,..interval_vars)])
+  ydups <- duplicated(y[,c(..group_vars_y,..interval_vars)])
   if(sum(ydups)!=0){
-    warning("sum(duplicated(y[,c(..group_vars_overlap,..interval_vars)]))!=0 is not TRUE. 
+    warning("sum(duplicated(y[,c(..group_vars_y,..interval_vars)]))!=0 is not TRUE. 
          there are replicate/duplicate intervals within groups of y. 
          removing these duplicated rows automatically")
     y <- y[!ydups]
@@ -416,9 +416,9 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
   x_expanded[, (measurement):=1L]
   
   y_expanded <-  EVAL("y[,list(",t,"=",interval_vars[1],":",interval_vars[2],"),
-                      by=c(interval_vars,group_vars_overlap)]")
+                      by=c(interval_vars,group_vars_y)]")
   
-  #y is expanded but if grouping variables are not in y (ie if group_vars_overlap is NULL) 
+  #y is expanded but if grouping variables are not in y (ie if group_vars_y is NULL) 
   #then there is only one set of intervals
   #in order to "complete" y, make a copy of y for groups correspnding to every combination of grouping variables
   #this will represent the desired output structure: 
@@ -431,7 +431,7 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
     names(unique_id_list) <- group_vars
     unique_id_dt <- do.call(CJ,unique_id_list)
     
-    y_expanded_complete <- CJ.dt(y_expanded,unique_id_dt,groups=group_vars_overlap)
+    y_expanded_complete <- CJ.dt(y_expanded,unique_id_dt,groups=group_vars_y)
   }else{
     y_expanded_complete <- y_expanded
   }
