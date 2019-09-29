@@ -217,7 +217,7 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     stopifnot(nrow(foverlaps(x,x))==nrow(x))  
     print(paste(Sys.time(),"passed errorcheck: x is non-overlapping."))
   }else{
-    print("Caution: skipping errorcheck. if data x is overlapping, incorrect results may be returned without error.")
+    warning("skipping errorcheck. if intervals in x are  overlapping, incorrect results may be returned without error.")
   }
   
   #make a copy of y so a new column doesn't get created in the user's data.table
@@ -365,7 +365,7 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
     stopifnot(nrow(foverlaps(x,x))==nrow(x))  
     print(paste(Sys.time(),"passed errorcheck: x is non-overlapping."))
   }else{
-    print("Caution: skipping errorcheck. if data x is overlapping, incorrect results may be returned without error.")
+    warning("skipping errorcheck. if intervals in x are  overlapping, incorrect results may be returned without error.")
   }
   
   
