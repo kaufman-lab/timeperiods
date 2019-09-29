@@ -83,7 +83,7 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
 #check by specifying skip_overlap_check=TRUE
 #WARNING, it's possible skipping this check may result in a completely wrong, meaningless return value without error
 
-#overlapping values of y are fine.
+#partially overlapping intervals in y are allowed but repeated identical intervals within groups will be deduplicated (with warning)
 
 
 #required_percentage=100 basically means na.rm=TRUE
@@ -195,6 +195,18 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
          If you wish to average these together, then do this first")
   }
   
+  group_vars_overlap <- intersect(group_vars,names(y)) 
+  
+  ydups <- duplicated(y[,c(..group_vars_overlap,..interval_vars)])
+  if(sum(ydups)!=0){
+    warning("sum(duplicated(y[,c(..group_vars_overlap,..interval_vars)]))!=0 is not TRUE. 
+         there are replicate/duplicate intervals within groups of y. 
+         removing these duplicated rows automatically")
+    y <- y[!ydups]
+  }
+  
+  
+  
   #set keys for testing if there are overlaps
   #groups do not need to be in x but they do need to be in y
   if(!skip_overlap_check){
@@ -216,8 +228,7 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   y[,yduration:=as.numeric( (get(interval_vars[2])-get(interval_vars[1])) + 1)]
   
   ### merge x and y ####
-  #group variables in x AND y. (group_vars are known to be in x from an error check above)
-  group_vars_overlap <- intersect(group_vars,names(y)) 
+  #group_vars_overlap are group variables in x AND y. (group_vars are known to be in x from an error check above)
   setkeyv(y,c(group_vars_overlap, interval_vars))
   setkeyv(x,c(group_vars_overlap, interval_vars))
   z <- foverlaps(x,y,nomatch=NULL)  
@@ -333,6 +344,17 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
          If you wish to average these together, then do this first")
   }
   
+  group_vars_overlap <- intersect(group_vars,names(y)) 
+  
+  ydups <- duplicated(y[,c(..group_vars_overlap,..interval_vars)])
+  if(sum(ydups)!=0){
+    warning("sum(duplicated(y[,c(..group_vars_overlap,..interval_vars)]))!=0 is not TRUE. 
+         there are replicate/duplicate intervals within groups of y. 
+         removing these duplicated rows automatically")
+    y <- y[!ydups]
+  }
+  
+  
   #set keys for testing if there are overlaps
   #groups do not need to be in x but they do need to be in y
   if(!skip_overlap_check){
@@ -346,7 +368,7 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
     print("Caution: skipping errorcheck. if data x is overlapping, incorrect results may be returned without error.")
   }
   
-  group_vars_overlap <- intersect(group_vars,names(y)) 
+  
   
   #create a length-1 character vector that will be a column name in x,y, and z that is not in use already
   t <- create_unused_name("time",c(names(x),names(y)))
