@@ -106,7 +106,7 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
 
 interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NULL,
                                     required_percentage=100,skip_overlap_check=FALSE){
-
+  EVAL <- function(...)eval(parse(text=paste0(...)))
     ###Variable names: reserved (these will be in the return data.table)
   
   xinterval_vars <- paste0("i.",interval_vars)
@@ -144,6 +144,9 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   #nobs vars will be the count of non-missing obs for each time-period in y (ie, summed from temp nobs)
   nobs_vars <- create_unused_name(paste("nobs",value_vars, sep="_"), c(names(x),names(y)))
 
+  
+  prod_vars <- create_unused_name(paste("product",value_vars, sep="_"), c(names(x),names(y)))
+  sumprod_vars <- create_unused_name(paste("sumproduct",value_vars, sep="_"), c(names(x),names(y)))
   
   ##error checking:
   
@@ -220,12 +223,6 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     warning("skipping errorcheck. if intervals in x are  overlapping, incorrect results may be returned without error.")
   }
   
-  #make a copy of y so a new column doesn't get created in the user's data.table
-  y <- copy(y)
-  
-  #count length of each interval,
-  #this will be used to count percentage of observed time x has in intervals of y
-  y[,yduration:=as.numeric( (get(interval_vars[2])-get(interval_vars[1])) + 1)]
   
   ### merge x and y ####
   #group_vars_y are group variables in x AND y. (group_vars are known to be in x from an error check above)
@@ -282,43 +279,44 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     set(z,i=which(!tmp),j=temp_nobs_vars[i],value=z[[dur]][!tmp])
   }
   
+  #take product in preparation for weighted mean
+  EVAL(
+    paste0("z[,","`:=`(",paste0(prod_vars,"=",value_vars,"*",dur,collapse=","),")","]")
+    )
 
   setkeyv(z,c(group_vars,interval_vars)) 
-  q <- z[,{
-    
-    #xdur will be the total summed length of all x intervals that overlap with a given y interval
-    #note that this is all in giant by statement so this is within unique values of "interval_vars"
-    #which are the y intervals
-    xduration <- sum(get(dur)) 
-    
-    nobs_l <- list()
-    value_l <- list()
-    for(i in 1:length(value_vars)){
-      
-      #sum the number of obs over y intervals
-      nobs_l[[nobs_vars[i]]] <- sum(get(temp_nobs_vars[i]))
-      
-      #take time-weighted averages over all value_vars 
-      #we could just as well use the variable-specific n_obs_expanded instead of duration_expanded as the product
-      #but n_obs_expanded are the same as duration_expanded except when value_vars is NA 
-      #in which case it's removed from the sum
-      value_l[[ value_vars[i] ]] <- sum(get(value_vars[i])*get(dur),na.rm=TRUE)/nobs_l[[i]]
-    }
   
-    c(
-      list("xduration"=xduration,"yduration"=yduration[1]),
-      nobs_l,
-      value_l
-      )
-  },by=c(group_vars,interval_vars)]
+  q <- EVAL(
+    paste0(
+      "z[,list(xduration=sum(",dur,"),",
+      paste0(nobs_vars,"=sum(",temp_nobs_vars,")",collapse=","),
+      ",",
+      paste0(sumprod_vars,"=sum(",prod_vars,",na.rm=TRUE)",collapse=","),
+      ") ,by=c(group_vars,interval_vars)]"
+    )
+  )
   
+  #calculate the mean as value_vars=sum(value_vars*dur)/sum(temp_nobs_vars) by group_vars and interval_vars
+  #note that I could just as use temp_nobs_vars instead of dur as the product
+   #but they're only different when value_vars is missing (by definition)
+     #so there's no point in bringing al the temp_nobs_vars columns into the j statement when one column can accomplish the same thing
+  EVAL(paste0("q[,`:=`(",paste0(value_vars,"=",sumprod_vars,"/",nobs_vars,collapse=","),")]"))
+
+  #remove temporary column sum_prod_vars
+  EVAL(paste0("q[,`:=`(",paste0(sumprod_vars,"=NULL",collapse=","),")]"))
+  
+  #count length of each interval,
+  #this will be used to count percentage of observed time x has in intervals of y
+  q[,yduration:=as.numeric( .SD[[2]]-.SD[[1]] + 1),.SDcols=c(interval_vars)]
+  
+    
   stopifnot(q[,all(xduration<=yduration)])
 
   
     #remove averages with too few observations in period
   #e.g. q[100*nobs_value/yduration < required_percentage, nobs_value:=NA]
   for(i in 1:length(value_vars)){
-    q[100*get(nobs_vars[i])/yduration < required_percentage, value_vars[i]:=NA]
+    EVAL(paste0("q[100*",nobs_vars[i],"/yduration < required_percentage, ", value_vars[i],":=as.numeric(NA)]"))
   }
   
   

@@ -498,10 +498,9 @@ stopifnot(all.equal(zzz1,zzz2))
 
 
 
-####large dataset that's non-overlapping: for timing comparison
-if(FALSE){
+####large dataset that's non-overlapping
 az_start_date <- seq(structure(0, class = "Date"),
-                    structure(1e6, class = "Date"),by=14)
+                    structure(1e5, class = "Date"),by=14)
 
 az <- CJ(id1=1:100, start_date=az_start_date)
 az[, end_date:=start_date+13]
@@ -509,7 +508,7 @@ az[, value1:=rnorm(.N)]
 az[, value2:=rnorm(.N)]
 
 bz_start_date <- seq(structure(2, class = "Date"),
-                    structure(1e6, class = "Date"),by=7)
+                    structure(1e5, class = "Date"),by=7)
 
 bz <- CJ(id1=1:100, start_date=bz_start_date)
 bz[, end_date:=start_date+6]
@@ -523,4 +522,5 @@ zzbig2 <- interval_weighted_avg_slow_f(az,bz,interval_vars=c("start_date","end_d
                                   value_vars=c("value1","value2"),
                                   group_vars="id1",
                                   skip_overlap_check=TRUE)
-}
+
+all.equal(zzbig1,zzbig2)
