@@ -91,7 +91,7 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
  #that need to exist in a period of y. if the percentage of nonmissing observations is less than required_percentage 
  #then the value returned for that period is NA
 
- #
+ #the va
 
 #Value
 #a data.table containing columns: interval_vars (from y) group_vars, value_vars (averaged to y intervals)
@@ -103,12 +103,13 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
 #of that y interval not overlapping with any interval in x
 #note that for periods in y not overlapping with any periods in x, no rows will be returned
 
+#KEYS Y WILL BE ALTERED. KEYS OF X WILL BE ALTERED IF AND ONLY IF skip_overlap_check=TRUE
 
 interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NULL,
                                     required_percentage=100,skip_overlap_check=FALSE){
   EVAL <- function(...)eval(parse(text=paste0(...)))
     ###Variable names: reserved (these will be in the return data.table)
-  
+
   xinterval_vars <- paste0("i.",interval_vars)
   #columns that will be named by foverlaps
   ##the ones prefixed with i. are from x 
@@ -227,8 +228,7 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   ### merge x and y ####
   #group_vars_y are group variables in x AND y. (group_vars are known to be in x from an error check above)
   setkeyv(y,c(group_vars_y, interval_vars))
-  setkeyv(x,c(group_vars_y, interval_vars))
-  z <- foverlaps(x,y,nomatch=NULL)  
+  z <- foverlaps(x,y,by.x=key(y),nomatch=NULL)  
   
   #nomatch=NULL here means intervals in x that don't match to y are dropped
   #we dont' care about them because we only want averages over intervals specified in y
@@ -333,7 +333,6 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
                                          required_percentage=100,skip_overlap_check=FALSE){
   
   EVAL <- function(...)eval(parse(text=paste0(...)))
-  
   
   #check for exact overlaps
   if(sum(duplicated(x[,c(..group_vars,..interval_vars)]))!=0){
