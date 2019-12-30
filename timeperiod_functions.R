@@ -68,7 +68,7 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
 #interval_vars is a length-2 character vector 
 #corresponding to columns in both x and y which are either integers or dates 
 #representing the start and end of each interval. 
-#intervals must be non-overlapping within groups that are combinations of the group_vars columns
+#intervals in x must be non-overlapping within groups that are combinations of the group_vars columns
 #a unit difference in these interval variables is assumed to be the smallest observable increment
 
 #group_vars is a character vector corresponding to columns in x that represent groups
@@ -77,7 +77,7 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
 #intervals specified in the columns corresponding to interval_vars
 
 
-#by default, the function ensures that periods are overlapping in x and y
+#by default, the function ensures that periods are non-overlapping in x and y
 #this is slow, but is a necessary condition of this function 
 #if you're sure your intervals are non-overlapping you can skip this
 #check by specifying skip_overlap_check=TRUE
@@ -91,7 +91,6 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
  #that need to exist in a period of y. if the percentage of nonmissing observations is less than required_percentage 
  #then the value returned for that period is NA
 
- #the va
 
 #Value
 #a data.table containing columns: interval_vars (from y) group_vars, value_vars (averaged to y intervals)
