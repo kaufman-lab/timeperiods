@@ -25,6 +25,8 @@ returns a data.table object. rows correspond to intervals from y, seperately for
 
 **interval_weighted_avg_slow_f** is a more algorithmicly straightforward but more memory intensive version of the function. Not appropriate for replacing sql-processes for large data but used extensively in testing.
 
+**remove_overlaps** takes measures over intervals which  may be partially-overlapping and breaks these intervals into non-overlapping intervals and exactly overlapping intervals. This would allow you to then average values over exactly-overlapping intervals. useful if you have overlapping monitoring data at a single site.
+
 ## Files
 
 - timeperiod_functions.R contains the source for the functions. 
