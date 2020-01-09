@@ -3,7 +3,7 @@
 
 interval_weighted_avg_f is a function which takes values recorded over non-overlapping intervals and averages them to defined intervals, possibly within individuals/monitors/locations. 
 
-this funciton uses the data.table package.
+this function uses the data.table package.
 
 Arguments: 
 x: a data.table object containing measuresments over intervals
