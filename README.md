@@ -21,7 +21,7 @@ returns a data.table object. rows correspond to intervals from y, seperately for
 - value variable columns from x, averaged to periods in y. named the same as they were in x
 - yduration: the length of the interval (ie as a count) specified in y
 - xduration: the total length of the intervals (ie as a count) from x that fall into this interval from y. this will be equal to yduration if x is comprehensive for (ie, fully covers)  this interval from y.
-- nobs_<value_vars>: for each value_var specified, this is the count of non-missing values from x that fall into this interval from y. this will be equal to xduration if the value_var contains no NA values over the y interval. If there are NAs in value variables, then nobs_<value_vars> will be different from xduration and won't necessarily be all the same.
+- nobs_<value_vars>: for each value_var specified, this is the count of non-missing values from x that fall into this interval from y. this will be equal to xduration if the value_var contains no NA values over the y interval. If there are NAs in value variables, then nobs_<value_vars> will be different from xduration and won't necessarily be all the same for each value_var.
 
 **interval_weighted_avg_slow_f** is a more algorithmicly straightforward but more memory intensive version of the function. Not appropriate for replacing sql-processes for large data but used extensively in testing.
 
