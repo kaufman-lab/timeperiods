@@ -15,15 +15,18 @@ Arguments:
 - required_percentage: the percentage of non-missing, measured x-observations in periods defined by y for the resulting measure in the return to be nonmissing. by default, 100 (any missing observations will result in an NA).
 - skip_overlap_check: by default, FALSE. setting this to TRUE will skip internal checks to make sure x intervals are non-overlapping within groups defined by group_vars. intervals in x must be non-overlapping, but you may want to skip this check if you've already checked this because it is computationally intensive for large datasets.
 
-returns a data.table object. rows correspond to intervals from y, seperately for groups defined by group_vars. columns of the returned data.table:
+returns a data.table object. rows correspond to intervals from y, separately for groups defined by group_vars. columns of the returned data.table:
 - grouping variables as specified in group_vars
 - interval columns corresponding to intervals in y. columns are named the same as they were in x and y.
 - value variable columns from x, averaged to periods in y. named the same as they were in x
 - yduration: the length of the interval (ie as a count) specified in y
 - xduration: the total length of the intervals (ie as a count) from x that fall into this interval from y. this will be equal to yduration if x is comprehensive for (ie, fully covers)  this interval from y.
 - nobs_<value_vars>: for each value_var specified, this is the count of non-missing values from x that fall into this interval from y. this will be equal to xduration if the value_var contains no NA values over the y interval. If there are NAs in value variables, then nobs_<value_vars> will be different from xduration and won't necessarily be all the same for each value_var.
-
+- xminstart: the minimum of the start intervals in x used in averaging returned y intervals, within groups. If the start of the earliest x interval is less than the start of the y interval, the minumum of the y interval is returned. Note, this is the minimum start time whether or not value_vars were missing or not for that start time. If you really need non-missing minimum start times, you can remove missing intervals from x prior to calling interval_weighted_avg_f (calling this separately for each value_var).
+- xmaxend: the maximum of the end intervals in x used in averaging returned y intervals, within groups. Again, like for xminstart, this does not pay attention to whether the interval in x had non-missing value_vars.
 **interval_weighted_avg_slow_f** is a more algorithmicly straightforward but more memory intensive version of the function. Not appropriate for replacing sql-processes for large data but used extensively in testing.
+
+when required_percentage is less than 100, xminstart and xmaxend may be useful to determine whether an average meets specified coverage requirements in terms of span (range) of the y interval. 
 
 **remove_overlaps** takes measures over intervals which  may be partially-overlapping and breaks these intervals into non-overlapping intervals and exactly overlapping intervals. This would allow you to then average values over exactly-overlapping intervals. useful if you have overlapping monitoring data at a single site.
 

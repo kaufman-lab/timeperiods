@@ -128,6 +128,16 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
          because it will be a special column in the return value. please rename this column.")
   }
   
+  if("xminstart"%in%names(x)|"xminstart"%in%names(y)){
+    stop("names(x) or names(y) contains the column name 'xminstart'. A column named 'xminstart' cannot be present in x or y 
+         because it will be a special column in the return value. please rename this column.")
+  }
+  
+  if("xmaxend"%in%names(x)|"xmaxend"%in%names(y)){
+    stop("names(x) or names(y) contains the column name 'xmaxend'. A column named 'xmaxend' cannot be present in x or y 
+         because it will be a special column in the return value. please rename this column.")
+  }
+  
   ###nonreserved variable names--temporary variables that can be named anything and but shouldn't conflict with existing varnames:
   
   
@@ -285,15 +295,25 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
 
   setkeyv(z,c(group_vars,interval_vars)) 
   
+  ###gforce data.table statement: sum, min, max are optimized for use in by statement.
+    #but syntactically this is limited. 
+      # x[, list(range=max(x)-min(x))] is NOT optimized 
+      #but x[, list(min=min(x), max=max(x))] is optimized
   q <- EVAL(
     paste0(
-      "z[,list(xduration=sum(",dur,"),",
+      "z[,list(",
+      "xduration=sum(",dur,"),",
       paste0(nobs_vars,"=sum(",temp_nobs_vars,")",collapse=","),
       ",",
       paste0(sumprod_vars,"=sum(",prod_vars,",na.rm=TRUE)",collapse=","),
-      ") ,by=c(group_vars,interval_vars)]"
+      ",xminstart=min(",xinterval_vars[1], "),xmaxend=max(",xinterval_vars[2],")",
+      "),",
+      "by=c(group_vars,interval_vars)]"
     )
   )
+  
+  #note that mean isn't directly calculated in the by because a complex formula 
+    #like this is not optimized whereas a simple sum is
   
   #calculate the mean as value_vars=sum(value_vars*dur)/sum(temp_nobs_vars) by group_vars and interval_vars
   #note that I could just as use temp_nobs_vars instead of dur as the product
@@ -318,8 +338,24 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     EVAL(paste0("q[100*",nobs_vars[i],"/yduration < required_percentage, ", value_vars[i],":=as.numeric(NA)]"))
   }
   
+  ###when xminstart/xmaxend is outside the range of interval_vars, set it to interval_vars
   
-  setcolorder(q, c(group_vars,interval_vars,value_vars,"yduration","xduration",nobs_vars))
+  EVAL(
+    paste0(
+      "q[xminstart<",interval_vars[1],",xminstart:=",interval_vars[1],"]"
+    )
+  )
+  
+  EVAL(
+    paste0(
+      "q[xmaxend>",interval_vars[2],",xmaxend:=",interval_vars[2],"]"
+    )
+  )
+  
+  
+  
+  setcolorder(q, c(group_vars,interval_vars,value_vars,"yduration","xduration",nobs_vars,
+                   "xminstart","xmaxend"))
   setkeyv(q,c(group_vars,interval_vars))
   q[]
   }
@@ -386,6 +422,17 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
          because it will be a special column in the return value. please rename this column.")
   }
   xdur <- "xduration"
+  
+  
+  if("xminstart"%in%names(x)|"xminstart"%in%names(y)){
+    stop("names(x) or names(y) contains the column name 'xduration'. A column named 'xminstart' cannot be present in x or y 
+         because it will be a special column in the return value. please rename this column.")
+  }
+  
+  if("xmaxend"%in%names(x)|"xmaxend"%in%names(y)){
+    stop("names(x) or names(y) contains the column name 'xduration'. A column named 'xmaxend' cannot be present in x or y 
+         because it will be a special column in the return value. please rename this column.")
+  }
   
   
   #nobs vars will be the count of non-missing obs for each time-period in y 
@@ -463,16 +510,45 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
   ydur_call <- paste0(ydur,"=length(unique(",t,"))")
   xdur_call <- paste0(xdur,"=sum(",measurement,",na.rm=TRUE)")
   
-  out <- EVAL("z[,","list(",avg_call,",",ydur_call,",",xdur_call,",",nobs_call,")" ,
-              ",by=c(interval_vars,group_vars)]")
+  #get the min start and max end dates for intervals that were actually provided as inputs in x
+  #as of 1/12/2020 I think gforce does not work with :=, 
+    #so this is written to create a separate table that is then merged
+  minmaxtable <- 
+    EVAL(
+      paste0(
+       "z[!is.na(",measurement,"),list(xminstart=min(time),xmaxend=max(time)),by=c(interval_vars,group_vars)]"    
+      )
+    )
+  
+  if(class(x[[interval_vars[1]]])=="Date"){
+    minmaxtable[, xminstart:=as.Date(xminstart,origin="1970-01-01")]  
+    minmaxtable[, xmaxend:=as.Date(xmaxend,origin="1970-01-01")]
+  }
+  
+    
+  
+  out <- EVAL(
+    paste0(
+    "z[,","list(",avg_call,",",ydur_call,",",xdur_call,",",nobs_call,")" ,
+              ",by=c(interval_vars,group_vars)]"
+    )
+    )
   
   stopifnot(EVAL("out[,all(",xdur,"<=",ydur,")]"))
+  
+  ##merge in minmaxtable
+  setkeyv(minmaxtable,c(group_vars,interval_vars))
+  setkeyv(out,c(group_vars,interval_vars))
+  
+  out <- minmaxtable[out]
+  
   
   for(i in 1:length(value_vars)){
     EVAL("out[100*",nobs_vars[i],"/",ydur,"< required_percentage,",value_vars[i],":=NA]")  
   }
 
-  setcolorder(out, c(group_vars,interval_vars,value_vars,ydur,xdur,nobs_vars))
+  setcolorder(out, c(group_vars,interval_vars,value_vars,ydur,xdur,nobs_vars,
+                     "xminstart","xmaxend"))
   
   setkeyv(out,c(group_vars,interval_vars))
   out[]
