@@ -143,6 +143,7 @@ q0.02 <- interval_weighted_avg_slow_f(x=a0.0,
 
 
 stopifnot(all.equal(q0.01,q0.02))
+stopifnot(nrow(q0.01)==nrow(b0.0))
 
 
 #averaging intervals longer than observed period
@@ -154,9 +155,9 @@ a0[, end_date:=start_date+6]
 a0[, value1:=rnorm(.N)] 
 a0[, value2:=rnorm(.N)]
 
-b0 <- data.table(start_date=as.Date(paste0(1999:2017,"-01-01")),
+b0_temp <- data.table(start_date=as.Date(paste0(1999:2017,"-01-01")),
                   end_date=as.Date(paste0(1999:2017,"-12-31")))
-
+b0 <- CJ.dt(b0_temp, unique(a0[,list(id1,id2)]) )
 
 ###two groups in x,two values####
 
@@ -175,6 +176,7 @@ q0_2 <- interval_weighted_avg_slow_f(x=a0,
 
 
 stopifnot(all.equal(q0_1,q0_2))
+stopifnot(nrow(q0_1)==nrow(b0))
 
   #simple example:
 #in this example, b is a regular schedule over which we'd like to compute averages of values from a
@@ -204,8 +206,10 @@ a[, value2:=rbinom(.N,5,prob=.5)]
 #randomly insert some missing values in one column:
 a[as.logical(rbinom(.N,1,prob=.3)), value:=NA]
 
-b <- data.table(start=seq(0L,56L,by=14L))
-b[,end:=start+13L]
+b_temp <- data.table(start=seq(0L,56L,by=14L))
+b_temp[,end:=start+13L]
+
+b <- CJ.dt(b_temp, unique(a[,list(id,id2)]) )
 
 
 q1 <- interval_weighted_avg_f(x=a,
@@ -223,6 +227,7 @@ q2 <- interval_weighted_avg_slow_f(x=a,
                              value_vars=c("value","value2"))
 
 stopifnot(all.equal(q1,q2))
+stopifnot(nrow(q1)==nrow(b))
 
 
 ##test missingness when required_percentage is not 100
@@ -244,12 +249,17 @@ qm2 <- interval_weighted_avg_slow_f(x=a,
                                    value_vars=c("value","value2"),
                                    required_percentage=50)
 stopifnot(all.equal(q1,q2))
+stopifnot(nrow(q2)==nrow(b))
 
 
 
 ##averaging intervals shorter than observed period & includes dates not in observed period at all ####
-b2 <- data.table(start=seq(0L,56L,by=3L))
-b2[,end:=start+2L]
+
+
+b2_temp <- data.table(start=seq(0L,56L,by=3L))
+b2_temp[,end:=start+2L]
+b2 <- CJ.dt(b2_temp, unique(a[,list(id,id2)]) )
+
 
 
 q2_1 <- interval_weighted_avg_f(x=a,
@@ -271,7 +281,8 @@ q2_2 <- interval_weighted_avg_slow_f(x=a,
 
 
 
-
+all.equal(q2_1,q2_2)
+stopifnot(nrow(q2_1)==nrow(b2))
 
 
 
@@ -314,35 +325,14 @@ stopifnot(all.equal(q3_1[id==1&id2==1],qm1[id==1&id2==1]))
 stopifnot(all.equal(q3_1[id==1&id2==2],q2_1[id==1&id2==2]))
 
 stopifnot(all.equal(q3_1,q3_2,check.attributes=FALSE))
-
-
-#more groups in x than in y
-b4 <- copy(b3)
-b4[,id2:=NULL]
-
-
-q4_1 <- interval_weighted_avg_f(x=a,
-                                y=b4,
-                                interval_vars=c("start","end"),
-                                group_vars=c("id","id2"),
-                                value_vars=c("value","value2"),
-                                required_percentage = 50
-)
-
-
-q4_2 <- interval_weighted_avg_slow_f(x=a,
-                                     y=b4,
-                                     interval_vars=c("start","end"),
-                                     group_vars=c("id","id2"),
-                                     value_vars=c("value","value2"),
-                                     required_percentage = 50
-)
-
-stopifnot(all.equal(q4_1,q4_2))
+stopifnot(nrow(q3_2)==nrow(b3))
 
 
 #periods that have overlaps in y--this should work
-b_overlap <- rbind(b2,data.table(start=3L,end=18L))
+b_overlap_temp <- rbind(b2_temp,data.table(start=3L,end=18L))
+
+b_overlap <- CJ.dt(b_overlap_temp, unique(a[,list(id,id2)]) )
+
 q_overlap_y1 <- interval_weighted_avg_f(x=a,
                                 y=b_overlap,
                                 interval_vars=c("start","end"),
@@ -362,7 +352,7 @@ q_overlap_y2 <- interval_weighted_avg_slow_f(x=a,
 
 
 all.equal(q_overlap_y1,q_overlap_y2)
-
+stopifnot(nrow(q_overlap_y1)==nrow(b_overlap))
 #periods that have partial overlaps in x--this should return an error
 
 a_overlap <- CJ(id=1:2,id2=1:2,start=c(-13L,seq(1L,36L,by=7L),2L))
@@ -485,11 +475,12 @@ b[, id2:=rbinom(n,7,prob=.5)]
 
 
 
-zzz1 <- interval_weighted_avg_f(a,b,interval_vars=c("start","end"),value_vars=c("value1","value2"),
+zzz1 <- interval_weighted_avg_f(x=a,y=b,interval_vars=c("start","end"),
+                                value_vars=c("value1","value2"),
                                            group_vars=c("id1","id2"),
                                            skip_overlap_check=FALSE)
 
-zzz2 <- interval_weighted_avg_f(a,b,interval_vars=c("start","end"),value_vars=c("value1","value2"),
+zzz2 <- interval_weighted_avg_slow_f(a,b,interval_vars=c("start","end"),value_vars=c("value1","value2"),
                                             group_vars=c("id1","id2"),
                                             skip_overlap_check=FALSE)
 
@@ -524,3 +515,43 @@ zzbig2 <- interval_weighted_avg_slow_f(az,bz,interval_vars=c("start_date","end_d
                                   skip_overlap_check=TRUE)
 
 all.equal(zzbig1,zzbig2)
+
+
+
+
+###
+test_x <- data.table(id1=c(1,1,1:4),region=c(1,1,1,1,2,NA),value=c(1:6),start_date=c(1L, 6L,11L,6L,11L,1L),end_date=c(5L, 10L,15L, 10L,15L,5L)) 
+test_y_temp <- data.table(id1=c(1,1,200),start_date=c(1L,50L,1L),end_date=c(7L,60L,7L))
+
+test_y <- CJ.dt(test_y_temp, unique(test_x[,list(region)]) )
+
+
+ff1 <- interval_weighted_avg_f(test_x, test_y, 
+                               interval_vars=c("start_date","end_date"),
+                               group_vars = c("id1","region"), value_vars=c("value"),required_percentage = 0)
+
+
+ff2 <- interval_weighted_avg_slow_f(test_x, test_y, 
+                                    interval_vars=c("start_date","end_date"),
+                                    group_vars = c("id1","region"), value_vars=c("value"),required_percentage = 0)
+
+
+all.equal(ff1,ff2)
+
+
+fg1 <- interval_weighted_avg_f(x=test_x, 
+                               y=test_y, 
+                               interval_vars=c("start_date","end_date"),
+                               group_vars = c("id1"), 
+                               value_vars=c("value"),
+                               required_percentage = 0
+)
+
+
+fg2 <- interval_weighted_avg_slow_f(test_x, test_y, 
+                                    interval_vars=c("start_date","end_date"),
+                                    group_vars = c("id1"), value_vars=c("value"),required_percentage = 0)
+
+
+
+all.equal(fg1,fg2)
