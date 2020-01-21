@@ -71,7 +71,7 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
 #intervals in x must be non-overlapping within groups that are combinations of the group_vars columns
 #a unit difference in these interval variables is assumed to be the smallest observable increment
 
-#group_vars is a character vector corresponding to columns in x that represent groups
+#group_vars is a character vector corresponding to columns in x and y that represent groups within which to take weighted averages
 
 ##value_vars are character vectores corresponding to columns in x which represent average values over the 
 #intervals specified in the columns corresponding to interval_vars
@@ -189,39 +189,37 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   
   if(!is.null(group_vars)){
     if(!all(group_vars %in% names(x))){
-      stop("group_vars are not found in columns of x")
+      stop("every value in group_vars must be a columname in x")
+    }
+    if(!all(group_vars %in% names(y))){
+      stop("every value in group_vars must be a columname in y")
     }
   }
   
   
-  #stop if start_dates are before end dats
+  #stop if start_dates are before end dates
   if(x[, sum(.SD[[2]]-.SD[[1]] <0)!=0,.SDcols=interval_vars]){
     stop("there exist values in x[[interval_vars[1] ]] that are
          less than corresponding values in  x[[interval_vars[2] ]]. 
          interval_vars must specify columns corresponding to increasing intervals")
   }
   
-  #check for exact overlaps
+  #check for exact overlaps in x
   if(sum(duplicated(x[,c(..group_vars,..interval_vars)]))!=0){
     stop("sum(duplicated(x[,c(..group_vars,..interval_vars)]))!=0 is not TRUE. 
          there are replicate/duplicate intervals within groups. 
          If you wish to average these together, then do this first")
   }
   
-  group_vars_y <- intersect(group_vars,names(y)) 
   
-  ydups <- duplicated(y[,c(..group_vars_y,..interval_vars)])
+  ydups <- duplicated(y[,c(..group_vars,..interval_vars)])
   if(sum(ydups)!=0){
-    warning("sum(duplicated(y[,c(..group_vars_y,..interval_vars)]))!=0 is not TRUE. 
+    warning("sum(duplicated(y[,c(..group_vars,..interval_vars)]))!=0 is not TRUE. 
          there are replicate/duplicate intervals within groups of y. 
          removing these duplicated rows automatically")
     y <- y[!ydups]
   }
   
-  
-  
-  #set keys for testing if there are overlaps
-  #groups do not need to be in x but they do need to be in y
   if(!skip_overlap_check){
 
     setkeyv(x,c(group_vars,interval_vars))
@@ -235,8 +233,8 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   
   
   ### merge x and y ####
-  #group_vars_y are group variables in x AND y. (group_vars are known to be in x from an error check above)
-  setkeyv(y,c(group_vars_y, interval_vars))
+
+  setkeyv(y,c(group_vars, interval_vars))
   z <- foverlaps(x,y,by.x=key(y),nomatch=NULL)  
   
   #nomatch=NULL here means intervals in x that don't match to y are dropped
@@ -246,26 +244,9 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   #afaik, foverlaps has no way of producing these 
   
   #get intervals in y that were not joined to x
-  setkeyv(y,c(group_vars_y, interval_vars))
-  setkeyv(z,c(group_vars_y, interval_vars))
+  setkeyv(z,c(group_vars, interval_vars))
   non_joins <- y[!z] #data.table idiomatically: return y subsetted to rows of "not z"
-  #that is, return rows of y that don't match to z
-  if(nrow(non_joins)>0){
-    #get all possible combinations of group variables and expand them:
-    unique_id_list <- lapply(group_vars,function(r){
-      x[,logical(1),keyby=r][[r]]
-    })
-    names(unique_id_list) <- group_vars
-    q <- do.call(CJ,unique_id_list)
-    
-    #if there are no group_vars in y just grid expand the two data.tables together
-    
-    non_joins <- CJ.dt(non_joins,q,groups=group_vars_y)
-    
-    ##add in intervals in y that weren't matched to intervals in x 
-    #separately for each combination of groups
-    z <- rbindlist(list(z,non_joins),fill=TRUE)
-  } 
+  z <- rbindlist(list(z,non_joins),fill=TRUE)
   
   #z has rows for every period in x
   #z needs to be collapsed to sums and averages according to intervals in y
@@ -369,6 +350,16 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
   
   EVAL <- function(...)eval(parse(text=paste0(...)))
   
+  
+  if(!is.null(group_vars)){
+    if(!all(group_vars %in% names(x))){
+      stop("every value in group_vars must be a columname in x")
+    }
+    if(!all(group_vars %in% names(y))){
+      stop("every value in group_vars must be a columname in y")
+    }
+  }
+  
   #check for exact overlaps
   if(sum(duplicated(x[,c(..group_vars,..interval_vars)]))!=0){
     stop("sum(duplicated(x[,c(..group_vars,..interval_vars)]))!=0 is not TRUE. 
@@ -376,15 +367,16 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
          If you wish to average these together, then do this first")
   }
   
-  group_vars_y <- intersect(group_vars,names(y)) 
   
-  ydups <- duplicated(y[,c(..group_vars_y,..interval_vars)])
+  ydups <- duplicated(y[,c(..group_vars,..interval_vars)])
   if(sum(ydups)!=0){
-    warning("sum(duplicated(y[,c(..group_vars_y,..interval_vars)]))!=0 is not TRUE. 
+    warning("sum(duplicated(y[,c(..group_vars,..interval_vars)]))!=0 is not TRUE. 
          there are replicate/duplicate intervals within groups of y. 
          removing these duplicated rows automatically")
     y <- y[!ydups]
   }
+  
+  
   
   
   #set keys for testing if there are overlaps
@@ -459,50 +451,14 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
   x_expanded[, (measurement):=1L]
   
   y_expanded <-  EVAL("y[,list(",t,"=",interval_vars[1],":",interval_vars[2],"),
-                      by=c(interval_vars,group_vars_y)]")
+                      by=c(interval_vars,group_vars)]")
   
-  #y is expanded but if grouping variables are not in y (ie if group_vars_y is NULL) 
-  #then there is only one set of intervals
-  #in order to "complete" y, make a copy of y for groups correspnding to every combination of grouping variables
-  #this will represent the desired output structure: 
-  #for every combination of group_vars, have every time-interval in y
-  
-  if(!is.null(group_vars)){
-    unique_id_list <- lapply(group_vars,function(r){
-      x[,logical(1),keyby=r][[r]]
-    })
-    names(unique_id_list) <- group_vars
-    unique_id_dt <- do.call(CJ,unique_id_list)
-    
-    y_expanded_complete <- CJ.dt(y_expanded,unique_id_dt,groups=group_vars_y)
-  }else{
-    y_expanded_complete <- y_expanded
-  }
-  
-  
-  #if grouping variables *are* in y...?
-  
-  ##take unique values of every group_var
-  ##https://stackoverflow.com/questions/36953026/what-is-the-fastest-way-to-get-a-vector-of-sorted-unique-values-from-a-data-tabl
-  
-  # unique_id_list <- lapply(group_vars,function(r){
-  #   x[,logical(1),keyby=r][[r]]
-  # })
-  # names(unique_id_list) <- group_vars
-  # unique_time_list <- list(t=y_expanded[[t]])
-  # y_expanded_complete <- do.call("CJ", c(unique_time_list, unique_id_list ))
-  # setnames(y_expanded_complete,"t",t)
-  # #merge back in start and end times
-  # setkeyv(y_expanded_complete,t)
-  # setkeyv(y_expanded,t)
-  # y_expanded_complete <- y_expanded[y_expanded_complete]
-  
-  
-  
+
+
   setkeyv(x_expanded,c(t, group_vars))
-  setkeyv(y_expanded_complete,c(t, group_vars))
+  setkeyv(y_expanded,c(t, group_vars))
   
-  z <- x_expanded[y_expanded_complete]
+  z <- x_expanded[y_expanded]
   
   avg_call <- paste0(value_vars,"=mean(",value_vars,",na.rm=TRUE)",collapse=",")
   paste0()
