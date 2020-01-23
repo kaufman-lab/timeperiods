@@ -7,7 +7,7 @@
 this function uses the data.table package.
 
 Arguments: 
-- x: a data.table object containing measuresments over intervals which must be non-overlapping within groups defined by group_vars. if group_vars is specified (non-NULL), BOTH x and y must contain columns specified in group_vars.
+- x: a data.table object containing measuresments over intervals which must be completely non-overlapping (i.e periods can't even be partially overlapping) within groups defined by group_vars. if group_vars is specified (non-NULL), BOTH x and y must contain columns specified in group_vars.
 - y: a data.table object containing intervals over which you'd like averages of x-measures computed. y intervals, unlike x intervals, may be overlapping. if group_vars is specified (non-NULL) and y contains those group_vars column names, this would allow different averaging period for each subject/monitor/location. if group_vars is non-NULL but columns specified in group_vars are not in y, then all intervals in y will be used to average measurements for every individual in x.
 - interval_vars: a length-2 character vector of column names in both x and y. these columns in x and y should be all numeric or all Dates.
 - value_vars: a character vector of column names in x, to be averaged
