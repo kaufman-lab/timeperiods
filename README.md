@@ -24,9 +24,10 @@ returns a data.table object. rows correspond to intervals from y, separately for
 - nobs_<value_vars>: for each value_var specified, this is the count of non-missing values from x that fall into this interval from y. this will be equal to xduration if the value_var contains no NA values over the y interval. If there are NAs in value variables, then nobs_<value_vars> will be different from xduration and won't necessarily be all the same for each value_var.
 - xminstart: the minimum of the start intervals in x used in averaging returned y intervals, within groups. If the start of the earliest x interval is less than the start of the y interval, the minumum of the y interval is returned. Note, this is the minimum start time whether or not value_vars were missing or not for that start time. If you really need non-missing minimum start times, you can remove missing intervals from x prior to calling interval_weighted_avg_f (calling this separately for each value_var).
 - xmaxend: the maximum of the end intervals in x used in averaging returned y intervals, within groups. Again, like for xminstart, this does not pay attention to whether the interval in x had non-missing value_vars.
-**interval_weighted_avg_slow_f** is a more algorithmicly straightforward but more memory intensive version of the function. Not appropriate for replacing sql-processes for large data but used extensively in testing.
 
 when required_percentage is less than 100, xminstart and xmaxend may be useful to determine whether an average meets specified coverage requirements in terms of span (range) of the y interval. 
+
+**interval_weighted_avg_slow_f** is a more algorithmicly straightforward but more memory intensive version of the function. Not appropriate for replacing sql-processes for large data but used extensively in testing.
 
 **remove_overlaps** takes measures over intervals which  may be partially-overlapping and breaks these intervals into non-overlapping intervals and exactly overlapping intervals. This would allow you to then average values over exactly-overlapping intervals. useful if you have overlapping monitoring data at a single site.
 
