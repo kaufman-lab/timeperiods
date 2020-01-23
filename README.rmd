@@ -65,7 +65,7 @@ interval_weighted_avg_f(x,y,interval_vars=c("start","end"),value_vars=c("value1"
 
 Note that average value is missing (NA) for periods which are not completely observed in x. By using looser competeness requirements we can get values (although note that these are not truly the average if we consider value1 to be an unmeasured random variable at non-measured timepoints):
 
-```{}
+```{r}
 (x <- data.table(value1=c(1,2,3,2,1),start=c(1L,6L,11L,16L,21L),end=c(5L,10L,15L,20L,25L)))
 (y <- data.table(start=c(0L,0L,7L,14L,21L),end=c(30L,6L,13L,20L,27L)))
 interval_weighted_avg_f(x,y,interval_vars=c("start","end"),value_vars=c("value1"),required_percentage=.8)

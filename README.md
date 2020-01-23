@@ -160,7 +160,7 @@ length.
 interval_weighted_avg_f(x,y,interval_vars=c("start","end"),value_vars=c("value1"))
 ```
 
-    ## [1] "2020-01-23 15:22:45 passed errorcheck: x is non-overlapping."
+    ## [1] "2020-01-23 15:34:39 passed errorcheck: x is non-overlapping."
 
     ##    start end   value1 yduration xduration nobs_value1 xminstart xmaxend
     ## 1:     0   6       NA         7         6           6         1       6
@@ -175,9 +175,40 @@ can get values (although note that these are not truly the average if we
 consider value1 to be an unmeasured random variable at non-measured
 timepoints):
 
-    (x <- data.table(value1=c(1,2,3,2,1),start=c(1L,6L,11L,16L,21L),end=c(5L,10L,15L,20L,25L)))
-    (y <- data.table(start=c(0L,0L,7L,14L,21L),end=c(30L,6L,13L,20L,27L)))
-    interval_weighted_avg_f(x,y,interval_vars=c("start","end"),value_vars=c("value1"),required_percentage=.8)
+``` r
+(x <- data.table(value1=c(1,2,3,2,1),start=c(1L,6L,11L,16L,21L),end=c(5L,10L,15L,20L,25L)))
+```
+
+    ##    value1 start end
+    ## 1:      1     1   5
+    ## 2:      2     6  10
+    ## 3:      3    11  15
+    ## 4:      2    16  20
+    ## 5:      1    21  25
+
+``` r
+(y <- data.table(start=c(0L,0L,7L,14L,21L),end=c(30L,6L,13L,20L,27L)))
+```
+
+    ##    start end
+    ## 1:     0  30
+    ## 2:     0   6
+    ## 3:     7  13
+    ## 4:    14  20
+    ## 5:    21  27
+
+``` r
+interval_weighted_avg_f(x,y,interval_vars=c("start","end"),value_vars=c("value1"),required_percentage=.8)
+```
+
+    ## [1] "2020-01-23 15:34:39 passed errorcheck: x is non-overlapping."
+
+    ##    start end   value1 yduration xduration nobs_value1 xminstart xmaxend
+    ## 1:     0   6 1.166667         7         6           6         1       6
+    ## 2:     0  30 1.800000        31        25          25         1      25
+    ## 3:     7  13 2.428571         7         7           7         7      13
+    ## 4:    14  20 2.285714         7         7           7        14      20
+    ## 5:    21  27 1.000000         7         5           5        21      25
 
 It would also be possible to calculate multiple averages simulataneously
 or calculate averages for different y-intervals for different sets of
