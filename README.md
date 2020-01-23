@@ -15,7 +15,7 @@ Arguments:
 - required_percentage: the percentage of non-missing, measured x-observations in periods defined by y for the resulting measure in the return to be nonmissing. by default, 100 (any missing observations will result in an NA).
 - skip_overlap_check: by default, FALSE. setting this to TRUE will skip internal checks to make sure x intervals are non-overlapping within groups defined by group_vars. intervals in x must be non-overlapping, but you may want to skip this check if you've already checked this because it is computationally intensive for large datasets.
 
-returns a data.table object. rows correspond to intervals from y, separately for groups defined by group_vars. nrow of the return will be nrow of y. columns of the returned data.table:
+returns a data.table object. Rows correspond to intervals from y, separately for groups defined by group_vars. *nrow of the return will be nrow of y because the function is designed to behave like a right inner join on intervals (and optional additional grouping variables) with an average*. Rows of y where an average cannot be calculated (either due to the measurements being present in X but NA or the measurements not being in x at all) are still returned with value variable columns set to NA (see the required_percentage argument for more details). Columns of the returned data.table are as follows
 - grouping variables as specified in group_vars
 - interval columns corresponding to intervals in y. columns are named the same as they were in x and y.
 - value variable columns from x, averaged to periods in y. named the same as they were in x
@@ -27,7 +27,9 @@ returns a data.table object. rows correspond to intervals from y, separately for
 
 when required_percentage is less than 100, xminstart and xmaxend may be useful to determine whether an average meets specified coverage requirements in terms of span (range) of the y interval. 
 
-**interval_weighted_avg_slow_f** is a more algorithmicly straightforward but more memory intensive version of the function. Not appropriate for replacing sql-processes for large data but used extensively in testing.
+*Technical overview*: This function merges periods in y to periods in x by interval variables and possible grouping variables. Since the function is designed to return a row for each row in y, non-matches in y are identified by non-join merges and added in as rows with missing value variables.  The value variables in the resulting data.table are averaged in a group-by statement (by periods defined in y as well by optional grouping variables). Specifically, the average is a weighted average that takes into account the duration of an observed measurement in a desired averaging period (y interval). The function is written to make use of data.table's Gforce capabilities. data.table's gforce  efficeintly does group-by operations directly in C rather than in R. Since data.table's ability to detect an optimized group-by function call is limited, using gforce for a weighted mean (and even just for an abritrary number of value_vars) requires use of some nonstandard evaluation. In this context, the non-standard evaluation is constructing a data.table call via paste and calling it with eval(parse(text=<>)). 
+
+**interval_weighted_avg_slow_f** is a more algorithmicly straightforward but more memory intensive version of the function. Specifically, it expands all individual measurements over an interval into repeated observations of that measurement for each discrete time increment in that interval. Since the resulting data is now observed on time-increments which are equal in length, weighted averaging is no longer necessary--a simple average can be used. Since this approach expands the data, it is not appropriate for replacing sql-pipilines for large data in R and will result in out-of-memory errors. Due to the mission-critical work that the  interval_weighted_avg_f function will be performing, I wrote interval_weighted_avg_slow_f as a secondary testing algorithm. Numerous tests invovling different data scenarios comparing interval_weighted_avg_f and interval_weighted_avg_slow_f return identical results.
 
 **remove_overlaps** takes measures over intervals which  may be partially-overlapping and breaks these intervals into non-overlapping intervals and exactly overlapping intervals. This would allow you to then average values over exactly-overlapping intervals. useful if you have overlapping monitoring data at a single site.
 
@@ -36,4 +38,6 @@ when required_percentage is less than 100, xminstart and xmaxend may be useful t
 - timeperiod_functions.R contains the source for the functions. 
 - The example file generates some example data and demonstrates how to use the interval_weighted_avg_f function.
 - the tests file contains testing to ensure the interval_weighted_avg_f function is working and contains some more complicated examples, particularly when dealing with recorded data that is overlapping.
+
+
 
