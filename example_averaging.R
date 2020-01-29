@@ -24,7 +24,7 @@ y[,end_date:=as.Date(paste0(year(start_date),"-12-31"))]
 ##interval vars is a length-2 character vector of column names in both x and y
 #value_vars is a character vector of column names in x, to be averaged
 ##group_vars is a character vector of colum names in x (and possibly in y)
-out <- interval_weighted_avg_f(x=x,y=y,interval_vars=c("start_date","end_date"),
+out <- interval_weighted_avg_f(x=x,y=CJ.dt(y,unique(x[,list(id)])),interval_vars=c("start_date","end_date"),
                         value_vars=c("value1","value2"),
                         group_vars="id")
 out 
@@ -48,7 +48,7 @@ out
   #this isn't recommended for large datasets since it expands every day into a row 
    #rather than doing weighted averages
   #but for your dataset there won't be a noticable difference
-out_slow<- interval_weighted_avg_slow_f(x=x,y=y,interval_vars=c("start_date","end_date"),
+out_slow<- interval_weighted_avg_slow_f(x=x,y=CJ.dt(y,unique(x[,list(id)])),interval_vars=c("start_date","end_date"),
                                value_vars=c("value1","value2"),
                                group_vars="id")
 
@@ -81,11 +81,7 @@ out2 <- interval_weighted_avg_f(x=x,y=y2,interval_vars=c("start_date","end_date"
 
 
 #compare...
-out2 <- interval_weighted_avg_slow_f(x=x,y=y2,interval_vars=c("start_date","end_date"),
-                                     value_vars=c("value1","value2"),
-                                     group_vars="id")
 
-all.equal(out,out2)
 
 
 out2_slow<- interval_weighted_avg_slow_f(x=x,y=y2,interval_vars=c("start_date","end_date"),
