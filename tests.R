@@ -230,6 +230,30 @@ stopifnot(all.equal(q1,q2))
 stopifnot(nrow(q1)==nrow(b))
 
 
+####group_vars=NULL
+q1n <- interval_weighted_avg_f(x=a[id==1&id2==1],
+                              y=b[id==1&id2==1],
+                              interval_vars=c("start","end"),
+                              group_vars=NULL,
+                              value_vars=c("value","value2")
+)
+
+
+q2n <- interval_weighted_avg_slow_f(x=a[id==1&id2==1],
+                                    y=b[id==1&id2==1],
+                                   interval_vars=c("start","end"),
+                                   group_vars=NULL,
+                                   value_vars=c("value","value2"))
+
+stopifnot(all.equal(q1n,q2n))
+setkey(q1,NULL)
+setkey(q1n,NULL)
+stopifnot(all.equal(q1n,q1[id==1&id2==1,.SD,.SDcols=-c("id","id2")]))
+stopifnot(nrow(q1)==nrow(b))
+
+
+
+
 ##test missingness when required_percentage is not 100
 
 
@@ -518,6 +542,23 @@ all.equal(zzbig1,zzbig2)
 
 
 
+####test loop
+zzbig1_list <- list()
+uid <- unique(az$id1)
+for(i in 1:length(uid)){
+  zzbig1_list[[i]] <- interval_weighted_avg_f(az[id1==uid[i]],bz[id1==uid[i]],
+                                    interval_vars=c("start_date","end_date"),
+                                    value_vars=c("value1","value2"),
+                                    group_vars=NULL,
+                                    skip_overlap_check=TRUE)
+  
+  zzbig1_list[[i]][,id1:=uid[i]]
+}
+zzbig1l <- rbindlist(zzbig1_list)
+setcolorder(zzbig1l, "id1")
+setkey(zzbig1l,NULL)
+setkey(zzbig1,NULL)
+all.equal(zzbig1, zzbig1l)
 
 ###
 test_x <- data.table(id1=c(1,1,1:4),region=c(1,1,1,1,2,NA),value=c(1:6),start_date=c(1L, 6L,11L,6L,11L,1L),end_date=c(5L, 10L,15L, 10L,15L,5L)) 
