@@ -89,7 +89,7 @@ for(i in unique(X$id1)){
     counter <- counter +1
   }
 }
-stopifnot(identical(
+stopifnot(all.equal(
   CJ.dt(X,Y,groups=c("id1","id2")), 
   rbindlist(templ)
 ))
@@ -116,7 +116,7 @@ for(i in unique(X$id1)){
     counter <- counter +1
   }
 }
-stopifnot(identical(
+stopifnot(all.equal(
   CJ.dt(X,Y,groups=c("id1","id2")), 
   rbindlist(templ)
 ))
