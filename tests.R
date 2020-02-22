@@ -89,7 +89,7 @@ for(i in unique(X$id1)){
     counter <- counter +1
   }
 }
-stopifnot(identical(
+stopifnot(all.equal(
   CJ.dt(X,Y,groups=c("id1","id2")), 
   rbindlist(templ)
 ))
@@ -116,7 +116,7 @@ for(i in unique(X$id1)){
     counter <- counter +1
   }
 }
-stopifnot(identical(
+stopifnot(all.equal(
   CJ.dt(X,Y,groups=c("id1","id2")), 
   rbindlist(templ)
 ))
@@ -130,7 +130,7 @@ stopifnot(identical(
 a0.0 <- data.table(start=seq(1L,100L,by=10L),value1=rnorm(10))
 a0.0[,end:=start+9L]
 b0.0 <- data.table(start=1L,end=25L)
-q0.01 <- interval_weighted_avg_f(x=a0.0,
+q0.01 <- interval_weighted_avg_new_f(x=a0.0,
                                 y=b0.0,
                                 interval_vars=c("start","end"),
                                 value_vars=c("value1"))
@@ -161,7 +161,7 @@ b0 <- CJ.dt(b0_temp, unique(a0[,list(id1,id2)]) )
 
 ###two groups in x,two values####
 
-q0_1 <- interval_weighted_avg_f(x=a0,
+q0_1 <- interval_weighted_avg_new_f(x=a0,
                              y=b0,
                              interval_vars=c("start_date","end_date"),
                              value_vars=c("value1","value2"),
@@ -212,7 +212,7 @@ b_temp[,end:=start+13L]
 b <- CJ.dt(b_temp, unique(a[,list(id,id2)]) )
 
 
-q1 <- interval_weighted_avg_f(x=a,
+q1 <- interval_weighted_avg_new_f(x=a,
                              y=b,
                              interval_vars=c("start","end"),
                              group_vars=c("id","id2"),
@@ -233,7 +233,7 @@ stopifnot(nrow(q1)==nrow(b))
 ##test missingness when required_percentage is not 100
 
 
-qm1 <- interval_weighted_avg_f(x=a,
+qm1 <- interval_weighted_avg_new_f(x=a,
                               y=b,
                               interval_vars=c("start","end"),
                               group_vars=c("id","id2"),
@@ -262,7 +262,7 @@ b2 <- CJ.dt(b2_temp, unique(a[,list(id,id2)]) )
 
 
 
-q2_1 <- interval_weighted_avg_f(x=a,
+q2_1 <- interval_weighted_avg_new_f(x=a,
                               y=b2,
                               interval_vars=c("start","end"),
                               group_vars=c("id","id2"),
@@ -305,7 +305,7 @@ b3 <- rbind(b3_11,b3_12,b3_21,b3_22)
 
 
 
-q3_1 <- interval_weighted_avg_f(x=a,
+q3_1 <- interval_weighted_avg_new_f(x=a,
                                 y=b3,
                                 interval_vars=c("start","end"),
                                 group_vars=c("id","id2"),
@@ -333,7 +333,7 @@ b_overlap_temp <- rbind(b2_temp,data.table(start=3L,end=18L))
 
 b_overlap <- CJ.dt(b_overlap_temp, unique(a[,list(id,id2)]) )
 
-q_overlap_y1 <- interval_weighted_avg_f(x=a,
+q_overlap_y1 <- interval_weighted_avg_new_f(x=a,
                                 y=b_overlap,
                                 interval_vars=c("start","end"),
                                 group_vars=c("id","id2"),
@@ -360,7 +360,7 @@ a_overlap[, end:=start+6L]
 a_overlap[, value:=rbinom(.N,5,prob=.5)]
 
 stopifnot(tryCatch(
-  interval_weighted_avg_f(a_overlap,b,interval_vars=c("start","end"),
+  interval_weighted_avg_new_f(a_overlap,b,interval_vars=c("start","end"),
                           value_vars=c("value"),
                           group_vars=c("id","id2")),
   error=function(x){TRUE}))
@@ -373,7 +373,7 @@ a_exact_overlap <- data.table(start_date=c(1L,1L,4L),end_date=c(3L,3L,10L),value
 b_exact_overlap <- data.table(start_date=2L:3L,end_date=8L:9L)
 
 stopifnot(
-  tryCatch(interval_weighted_avg_f(a_exact_overlap,b_exact_overlap,interval_vars=c("start_date","end_date"),
+  tryCatch(interval_weighted_avg_new_f(a_exact_overlap,b_exact_overlap,interval_vars=c("start_date","end_date"),
                                    value_vars=c("value1")),error=function(x){TRUE})
 )
      
@@ -385,7 +385,7 @@ stopifnot(
 
 #misspecified order of interval_vars should return an error:
 stopifnot(tryCatch(
-  interval_weighted_avg_f(a,b,interval_vars=c("end_date","start_date"),
+  interval_weighted_avg_new_f(a,b,interval_vars=c("end_date","start_date"),
                           value_vars=c("value1","value2"),
                           group_vars=c("id1","id2")),
   error=function(x){TRUE}))
@@ -433,7 +433,7 @@ b_overlap1[, end_date:=start_date+sample(0:10,nrow(b_overlap1),replace=TRUE)]
 
 
 
-system.time(realistic1 <-   interval_weighted_avg_f(x=a_overlap1_removed,b_overlap1,interval_vars=c("start_date","end_date"),
+system.time(realistic1 <-   interval_weighted_avg_new_f(x=a_overlap1_removed,b_overlap1,interval_vars=c("start_date","end_date"),
                           value_vars=c("value1","value2"),
                           group_vars=c("id1","id2"),
                           skip_overlap_check=FALSE))
@@ -475,7 +475,7 @@ b[, id2:=rbinom(n,7,prob=.5)]
 
 
 
-zzz1 <- interval_weighted_avg_f(x=a,y=b,interval_vars=c("start","end"),
+zzz1 <- interval_weighted_avg_new_f(x=a,y=b,interval_vars=c("start","end"),
                                 value_vars=c("value1","value2"),
                                            group_vars=c("id1","id2"),
                                            skip_overlap_check=FALSE)
@@ -504,16 +504,40 @@ bz_start_date <- seq(structure(2, class = "Date"),
 bz <- CJ(id1=1:100, start_date=bz_start_date)
 bz[, end_date:=start_date+6]
 
-zzbig1 <- interval_weighted_avg_f(az,bz,interval_vars=c("start_date","end_date"),
+##~100mb 800seconds
+system.time(zzbig1 <- interval_weighted_avg_new_f(az,bz,interval_vars=c("start_date","end_date"),
                                   value_vars=c("value1","value2"),
                                 group_vars="id1",
-                                skip_overlap_check=TRUE)
+                                skip_overlap_check=TRUE))
 
+#~550mb 11 seconds
+system.time(zzbig1 <- interval_weighted_avg_f(az,bz,interval_vars=c("start_date","end_date"),
+                                                  value_vars=c("value1","value2"),
+                                                  group_vars="id1",
+                                                  skip_overlap_check=TRUE))
+#100 mb 20 seconds 
+system.time({
+  uid <- unique(az$id1)
+  zzbig1_list <- list()
+  for(i in 1:length(uid))
+  zzbig1_list[[i]] <- interval_weighted_avg_f(az[id1==uid[1]],bz[id1==uid[1]],
+                                    interval_vars=c("start_date","end_date"),
+                                              value_vars=c("value1","value2"),
+                                              group_vars="id1",
+                                              skip_overlap_check=TRUE)
+  zzbig1l <- rbindlist(zzbig1_list)
+  }
+  )
+
+
+
+#2.4g
+system.time(
 zzbig2 <- interval_weighted_avg_slow_f(az,bz,interval_vars=c("start_date","end_date"),
                                   value_vars=c("value1","value2"),
                                   group_vars="id1",
                                   skip_overlap_check=TRUE)
-
+)
 all.equal(zzbig1,zzbig2)
 
 
@@ -526,7 +550,7 @@ test_y_temp <- data.table(id1=c(1,1,200),start_date=c(1L,50L,1L),end_date=c(7L,6
 test_y <- CJ.dt(test_y_temp, unique(test_x[,list(region)]) )
 
 
-ff1 <- interval_weighted_avg_f(test_x, test_y, 
+ff1 <- interval_weighted_avg_new_f(test_x, test_y, 
                                interval_vars=c("start_date","end_date"),
                                group_vars = c("id1","region"), value_vars=c("value"),required_percentage = 0)
 
@@ -539,7 +563,7 @@ ff2 <- interval_weighted_avg_slow_f(test_x, test_y,
 all.equal(ff1,ff2)
 
 
-fg1 <- interval_weighted_avg_f(x=test_x, 
+fg1 <- interval_weighted_avg_new_f(x=test_x, 
                                y=test_y, 
                                interval_vars=c("start_date","end_date"),
                                group_vars = c("id1"), 

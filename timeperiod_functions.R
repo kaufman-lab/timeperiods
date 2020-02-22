@@ -51,6 +51,154 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
 
 
 
+
+
+
+
+interval_weighted_avg_new_f <- function(x, y,interval_vars,value_vars, group_vars=NULL,
+                                    required_percentage=100,skip_overlap_check=FALSE){
+  EVAL <- function(...)eval(parse(text=paste0(...)))
+  ###Variable names: reserved (these will be in the return data.table)
+  
+  nobs_vars <- paste("nobs",value_vars, sep="_")
+  
+  ##error checking:
+  
+  if(x[,any(sapply(.SD,function(m){any(is.na(m))})) ,.SDcols=interval_vars]){
+    stop("columns corresponding to interval_vars cannot be missing in x")
+  }
+  
+  if(y[,any(sapply(.SD,function(m){any(is.na(m))})) ,.SDcols=interval_vars]){
+    stop("columns corresponding to interval_vars cannot be missing in y")
+  }
+  
+  if(x[,!all(sapply(.SD,is.integer)|sapply(.SD,function(x){class(x)=="Date"})),.SDcols=interval_vars]){
+    stop("interval_vars must correspond to columns in x of class integer or Date")
+  }
+  if(x[,class(.SD[[1]])!=class(.SD[[2]]),.SDcols=interval_vars]){
+    stop("interval_vars must correspond to columns in x of the same class")
+  }
+  
+  if(y[,!all(sapply(.SD,is.integer)|sapply(.SD,function(x){class(x)=="Date"})),.SDcols=interval_vars]){
+    stop("interval_vars must correspond to columns in y of class integer or Date")
+  }
+  if(y[,class(.SD[[1]])!=class(.SD[[2]]),.SDcols=interval_vars]){
+    stop("interval_vars must correspond to columns in y of the same class")
+  }
+  
+  #stop if there are variables specified in both groups and interval_vars
+  if(!length(intersect(interval_vars,group_vars))==0){
+    stop("interval_vars and group_vars cannot refer to the same column(s)")
+  }
+  
+  if(!is.null(group_vars)){
+    if(!all(group_vars %in% names(x))){
+      stop("every value in group_vars must be a columname in x")
+    }
+    if(!all(group_vars %in% names(y))){
+      stop("every value in group_vars must be a columname in y")
+    }
+  }
+  
+  
+  #stop if start_dates are before end dates
+  if(x[, sum(.SD[[2]]-.SD[[1]] <0)!=0,.SDcols=interval_vars]){
+    stop("there exist values in x[[interval_vars[1] ]] that are
+         less than corresponding values in  x[[interval_vars[2] ]]. 
+         interval_vars must specify columns corresponding to increasing intervals")
+  }
+  
+  #check for exact overlaps in x
+  if(sum(duplicated(x[,c(..group_vars,..interval_vars)]))!=0){
+    stop("sum(duplicated(x[,c(..group_vars,..interval_vars)]))!=0 is not TRUE. 
+         there are replicate/duplicate intervals within groups. 
+         If you wish to average these together, then do this first")
+  }
+  
+  
+  ydups <- duplicated(y[,c(..group_vars,..interval_vars)])
+  if(sum(ydups)!=0){
+    warning("sum(duplicated(y[,c(..group_vars,..interval_vars)]))!=0 is not TRUE. 
+         there are replicate/duplicate intervals within groups of y. 
+         removing these duplicated rows automatically")
+    y <- y[!ydups]
+  }
+  
+  if(!skip_overlap_check){
+    
+    setkeyv(x,c(group_vars,interval_vars))
+    
+    #stop if there are overlapping periods within groups: 
+    stopifnot(nrow(foverlaps(x,x))==nrow(x))  
+    print(paste(Sys.time(),"passed errorcheck: x is non-overlapping."))
+  }else{
+    message("skipping errorcheck. if intervals in x are  overlapping, incorrect results may be returned without error.")
+  }
+  
+  
+  ### non-equi join of x and y (right join to y) and do an immediate group by EACHI####
+  setkeyv(x,c(group_vars,interval_vars))
+  setkeyv(y,c(group_vars,interval_vars))
+  
+  
+   
+  q <- EVAL(
+  paste0(
+  "x[y, list(",
+    "xminstart=min(interval_start <- pmax(x.",interval_vars[1],",i.",interval_vars[1],")),",
+    "xmaxend=max(interval_end <- pmin(x.",interval_vars[2],",i.",interval_vars[2],")),",
+    "xduration=sum(dur<- as.integer(interval_end-interval_start+1L)),",
+    paste0(value_vars,"=weighted.mean(",value_vars,",dur,na.rm=TRUE)",collapse=","),",",
+    paste0(nobs_vars,"=sum(as.integer(!is.na(",value_vars,"))*dur)",collapse=","),
+  "),",
+  "on=c(group_vars, '",interval_vars[2],">= ",interval_vars[1],"',",
+       "'",interval_vars[1],"<= ",interval_vars[2],"'),",
+  "keyby=.EACHI",
+  "]"
+  )
+  )
+  #for example, if interval_vars=c("start_date","end_date") and value_vars=c("value1","value2")
+  # q <- x[y, list( 
+  #           xminstart=min(interval_start <- pmax(x.start_date,i.start_date)),
+  #           xmaxend=max(interval_end <- pmin(x.end_date,i.end_date)),
+  #           xduration=sum(dur<- as.integer(interval_end-interval_start+1L)),
+  #           value1=weighted.mean(value1,dur,na.rm=TRUE),
+  #           value2=weighted.mean(value2,dur,na.rm=TRUE),
+  #           nobs_value1=sum(as.integer(!is.na(value1))*dur),
+  #           nobs_value2=sum(as.integer(!is.na(value2))*dur)
+  #           ),
+  #   on=c(group_vars, "end_date>= start_date",
+  #        "start_date<= end_date"),
+  #   keyby=.EACHI
+  #   ]
+  
+  # #the names have gotten switched (ie the column named interval_vars[1] is actually the endpoint
+    #due to non-equi join joining the end point to the start point and start point to end point
+  #fix this
+  setnames(q, interval_vars, rev(interval_vars)) 
+    
+  q[,yduration:=as.numeric( .SD[[2]]-.SD[[1]] + 1),.SDcols=c(interval_vars)]
+  q[is.na(xduration), c("xduration",nobs_vars):=0]
+  stopifnot(q[,all(xduration<=yduration)])
+  
+  
+  #remove averages with too few observations in period
+  #e.g. q[100*nobs_value/yduration < required_percentage, nobs_value:=NA]
+  for(i in 1:length(value_vars)){
+    EVAL(paste0("q[100*",nobs_vars[i],"/yduration < required_percentage, ", 
+                value_vars[i],":=as.numeric(NA)]"))
+  }
+  
+  setcolorder(q, c(group_vars,interval_vars,value_vars,"yduration","xduration",nobs_vars,
+                   "xminstart","xmaxend"))
+  setkeyv(q,c(group_vars,interval_vars))
+  q[]
+}
+
+
+
+
+
 #function to take values over defined periods which are non-overlapping within individuals specified by group_vars
 #average those values up (or down) to a specified schedule
 #this schedule does not necessarily need to align to the periods
