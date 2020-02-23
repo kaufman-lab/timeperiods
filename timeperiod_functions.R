@@ -104,7 +104,7 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
 #of that y interval not overlapping with any interval in x
 #note that for periods in y not overlapping with any periods in x, no rows will be returned
 
-#KEYS Y WILL BE ALTERED. KEYS OF X WILL BE ALTERED IF AND ONLY IF skip_overlap_check=TRUE
+#KEYS of x AND Y WILL BE ALTERED.
 
 interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NULL,
                                     required_percentage=100,skip_overlap_check=FALSE,
