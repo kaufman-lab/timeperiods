@@ -115,8 +115,9 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   
   
   if( any(c("yduration","xduration","xminstart","xmaxend")%in% c(interval_vars,value_vars,group_vars))){
-    stop("column(s) named 'yduration', 'xduration', 'xminstart', or 'xmaxend' has been detected in interval_vars, value_vars, or group_vars.
-         These column names ('yduration', 'xduration', 'xminstart', or 'xmaxend') are reserved for the output. please rename this (or these) column(s) in x/y/interval_vars/value_vars/group_vars.")
+    stop(paste0("column(s) named 'yduration', 'xduration', 'xminstart', or 'xmaxend' has been detected in interval_vars,",
+                " value_vars, or group_vars.         These column names ('yduration', 'xduration', 'xminstart', or 'xmaxend')",
+                " are reserved for the output. please rename this (or these) column(s) in x/y/interval_vars/value_vars/group_vars."))
   }
   
   if(!is.null(group_vars)){
@@ -156,7 +157,7 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     stop("interval_vars must correspond to columns in x of the same class")
   }
   
-  if(y[,!all(sapply(.SD,is.integer)|sapply(.SD,function(x){class(x)=="Date"})),.SDcols=interval_vars]){
+  if(y[,!all(sapply(.SD,is.integer)|sapply(.SD,function(x){any(class(x)%in%c("Date"))})),.SDcols=interval_vars]){
     stop("interval_vars must correspond to columns in y of class integer or Date")
   }
   if(y[,class(.SD[[1]])!=class(.SD[[2]]),.SDcols=interval_vars]){
@@ -236,15 +237,9 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   xx <- proc.time()}
   
   
-  
-  #using keyby ensures z is keyed by the variables that it will be grouped by subsequently
-  ##if there does happen to be a column name conflict 
-    #which would happen if  "interval_start" or "interval_end" are in group_vars and interval_vars
-    #the setnames (As of data.table 1.12.8) would rename only the
-    #first occurance of interval start in the following setnames command with warning.
-    #since keyby puts those variables first, this is exactly what we want--
-      #the group_vars/interval_vars will be renamed  to gvars/ivars and
-     #the temporary columns interval_start and interval_end will stay as is
+ ##rename all user-supplied columns to the column names pre-specified above. 
+  #this avoids naming conflicts with temp variables such as interval_end, interval_start, dur, and the other temporary variables
+  #columns will be renamed back to their original names at the end of the function
   setnames(z, 
            c(group_vars,interval_vars,paste0("i.",interval_vars),value_vars),
            c(gvars,ivars,i.ivars,vvars)
