@@ -126,7 +126,7 @@ stopifnot(all.equal(
 
 
 
-##averaging intervals where groups=NULL
+##averaging intervals where groups=NULL by default
 a0.0 <- data.table(start=seq(1L,100L,by=10L),value1=rnorm(10))
 a0.0[,end:=start+9L]
 b0.0 <- data.table(start=1L,end=25L)
@@ -272,8 +272,8 @@ qm2 <- interval_weighted_avg_slow_f(x=a,
                                    group_vars=c("id","id2"),
                                    value_vars=c("value","value2"),
                                    required_percentage=50)
-stopifnot(all.equal(q1,q2))
-stopifnot(nrow(q2)==nrow(b))
+stopifnot(all.equal(qm1,qm2))
+stopifnot(nrow(qm1)==nrow(b))
 
 
 
@@ -528,7 +528,7 @@ bz_start_date <- seq(structure(2, class = "Date"),
 bz <- CJ(id1=1:100, start_date=bz_start_date)
 bz[, end_date:=start_date+6]
 
-zzbig1 <- interval_weighted_avg_f(az,bz,interval_vars=c("start_date","end_date"),
+zzbig1 <- interval_weighted_avg_f(x=az,y=bz,interval_vars=c("start_date","end_date"),
                                   value_vars=c("value1","value2"),
                                 group_vars="id1",
                                 skip_overlap_check=TRUE)

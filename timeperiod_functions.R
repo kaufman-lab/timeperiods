@@ -1,3 +1,5 @@
+
+
 library(data.table)
 
 create_unused_name <- function(x,reserved_cols){
@@ -107,58 +109,35 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
 interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NULL,
                                     required_percentage=100,skip_overlap_check=FALSE){
   EVAL <- function(...)eval(parse(text=paste0(...)))
-    ###Variable names: reserved (these will be in the return data.table)
-
-  xinterval_vars <- paste0("i.",interval_vars)
-  #columns that will be named by foverlaps
-  ##the ones prefixed with i. are from x 
-  if(any(xinterval_vars%in% names(x)) | any(xinterval_vars%in% names(y)) ){
-    stop("names(x) or names(y) contains columns ",paste0(interval_vars,collapse=" "),
-         " and at least one column named ",paste0(xinterval_vars,collapse=" "),". Columns named ",paste0(xinterval_vars,collapse=" "),
-         " cannot be present in x or y because they are reserved for use by foverlaps. please rename this/these column(s).")
-  }
-
-  if("yduration"%in%names(x)|"yduration"%in%names(y)){
-    stop("names(x) or names(y) contains the column name 'yduration'. A column named 'yduration' cannot be present in x or y 
-         because it will be a special column in the return value. please rename this column.")
-  }
-  
-  if("xduration"%in%names(x)|"xduration"%in%names(y)){
-    stop("names(x) or names(y) contains the column name 'xduration'. A column named 'xduration' cannot be present in x or y 
-         because it will be a special column in the return value. please rename this column.")
-  }
-  
-  if("xminstart"%in%names(x)|"xminstart"%in%names(y)){
-    stop("names(x) or names(y) contains the column name 'xminstart'. A column named 'xminstart' cannot be present in x or y 
-         because it will be a special column in the return value. please rename this column.")
-  }
-  
-  if("xmaxend"%in%names(x)|"xmaxend"%in%names(y)){
-    stop("names(x) or names(y) contains the column name 'xmaxend'. A column named 'xmaxend' cannot be present in x or y 
-         because it will be a special column in the return value. please rename this column.")
-  }
-  
-  ###nonreserved variable names--temporary variables that can be named anything and but shouldn't conflict with existing varnames:
-  
-  
-  
-  #create a length-1 character vector that will be a column name in x,y, and z that is not in use already
-  
-  dur <- create_unused_name("duration",c(names(x),names(y)))
-  
-  #temp nobs vars will be the count (number) of non-missing obs for each row resulting from the foverlaps merge
-  
-  temp_nobs_vars <- create_unused_name(paste("temp_nobs",value_vars, sep="_"), c(names(x),names(y)))
-  
-  
-  #nobs vars will be the count of non-missing obs for each time-period in y (ie, summed from temp nobs)
-  nobs_vars <- create_unused_name(paste("nobs",value_vars, sep="_"), c(names(x),names(y)))
 
   
-  prod_vars <- create_unused_name(paste("product",value_vars, sep="_"), c(names(x),names(y)))
-  sumprod_vars <- create_unused_name(paste("sumproduct",value_vars, sep="_"), c(names(x),names(y)))
   
-  ##error checking:
+  if( any(c("yduration","xduration","xminstart","xmaxend")%in% c(interval_vars,value_vars,group_vars))){
+    stop("column(s) named 'yduration', 'xduration', 'xminstart', or 'xmaxend' has been detected in interval_vars, value_vars, or group_vars.
+         These column names ('yduration', 'xduration', 'xminstart', or 'xmaxend') are reserved for the output. please rename this (or these) column(s) in x/y/interval_vars/value_vars/group_vars.")
+  }
+  
+  if(!is.null(group_vars)){
+    if(!all(group_vars %in% names(x))){
+      stop("every value in group_vars must be a columname in x")
+    }
+    if(!all(group_vars %in% names(y))){
+      stop("every value in group_vars must be a columname in y")
+    }
+  }
+  
+  
+   if(!all(interval_vars %in% names(x))){
+     stop("every value in interval_vars must be a columname in x")
+   }
+   if(!all(interval_vars %in% names(y))){
+     stop("every value in interval_vars must be a columname in y")
+   }
+  
+  if(!all(value_vars %in% names(x))){
+    stop("every value in value_vars must be a columname in x")
+  }
+  
   
   if(x[,any(sapply(.SD,function(m){any(is.na(m))})) ,.SDcols=interval_vars]){
     stop("columns corresponding to interval_vars cannot be missing in x")
@@ -187,13 +166,12 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
     stop("interval_vars and group_vars cannot refer to the same column(s)")
   }
   
-  if(!is.null(group_vars)){
-    if(!all(group_vars %in% names(x))){
-      stop("every value in group_vars must be a columname in x")
-    }
-    if(!all(group_vars %in% names(y))){
-      stop("every value in group_vars must be a columname in y")
-    }
+  if(!length(intersect(value_vars,group_vars))==0){
+    stop("value_vars and group_vars cannot refer to the same column(s)")
+  }
+  
+  if(!length(intersect(value_vars,interval_vars))==0){
+    stop("value_vars and interval_vars cannot refer to the same column(s)")
   }
   
   
@@ -234,47 +212,62 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   
   ### merge x and y ####
 
-  setkeyv(y,c(group_vars, interval_vars))
-  z <- foverlaps(x,y,by.x=key(y),nomatch=NULL)  
+  #in order to guarantee that there aren't column name conflicts
+     #between the temporary variables such as interval_start 
+    #and the user-provided column names such as group_vars, value_vars, interval_vars
+  #create temporary names for user-provided variables
+  gvars <- if(!is.null(group_vars)){paste0("g",1:length(group_vars))}else{NULL}
+  vvars <- paste0("v",1:length(value_vars))
+  ivars <- paste0("i",1:2)
+  i.ivars <- paste0("i.",ivars)
   
-  #nomatch=NULL here means intervals in x that don't match to y are dropped
-  #we dont' care about them because we only want averages over intervals specified in y
+  ### non-equi join of x and y (right join to y) and do an immediate group by EACHI####
+  setkeyv(x,c(group_vars,interval_vars))
+  setkeyv(y,c(group_vars,interval_vars))
+  z <- foverlaps(x=y,y=x) #i.ivars are from x=y, ivars are from y=x
   
-  #HOWEVER we *do* want intervals in y that aren't in x and these are not created 
-  #afaik, foverlaps has no way of producing these 
+  #using keyby ensures z is keyed by the variables that it will be grouped by subsequently
+  ##if there does happen to be a column name conflict 
+    #which would happen if  "interval_start" or "interval_end" are in group_vars and interval_vars
+    #the setnames (As of data.table 1.12.8) would rename only the
+    #first occurance of interval start in the following setnames command with warning.
+    #since keyby puts those variables first, this is exactly what we want--
+      #the group_vars/interval_vars will be renamed  to gvars/ivars and
+     #the temporary columns interval_start and interval_end will stay as is
+  setnames(z, 
+           c(group_vars,interval_vars,paste0("i.",interval_vars),value_vars),
+           c(gvars,ivars,i.ivars,vvars)
+  )
   
-  #get intervals in y that were not joined to x
-  setkeyv(z,c(group_vars, interval_vars))
-  non_joins <- y[!z] #data.table idiomatically: return y subsetted to rows of "not z"
-  z <- rbindlist(list(z,non_joins),fill=TRUE)
-  
-  #z has rows for every period in x
-  #z needs to be collapsed to sums and averages according to intervals in y
-  #start by taking the row-wise length (duration) of the overlapping period in each row
+  EVAL(paste0("z[,interval_end:=pmin(",i.ivars[2],", ",ivars[2],")]"))
+  EVAL(paste0("z[,interval_start:=pmax(",i.ivars[1],",",ivars[1],")] "))
   
   
-  z[, (dur):=as.integer(pmin( get(xinterval_vars[2]), get(interval_vars[2]))-
-                          pmax(get(xinterval_vars[1]),get(interval_vars[1]))) + 1L] 
+  z[,dur := as.integer(interval_end-interval_start+1L)]
   
-  #dur being missing corresponds to xinterval_vars being missing, from merging in nonmatches above
-  #the duration of overlap is zero, not missing.
-  z[is.na(get(dur)),(dur):=0]
+  #temp_nobs_vars is the count of nonmissing observations
+   #this is 0 when the value_var is missing and dur otherwise. 
+   #calculated as !is.na(value_var)*dur
+  temp_nobs_vars <- paste0("vnm",1:length(value_vars))
+   for(i in 1:length(vvars)){
+      set(z, 
+          j=temp_nobs_vars[i], 
+          value=as.integer(!is.na(z[[vvars[i]]]))*z[["dur"]]
+      )
+   }
   
-  #count the number of observations for each value_var
-  #if the value_var is missing for this row, then the number of observations of that value in the period is zero
-  #otherwise the number of observations is the length of the period
-  for(i in 1:length(temp_nobs_vars)){
-    tmp <- is.na(z[[value_vars[i]]])
-    set(z,j=temp_nobs_vars[i],value=0L)
-    set(z,i=which(!tmp),j=temp_nobs_vars[i],value=z[[dur]][!tmp])
-  }
   
-  #take product in preparation for weighted mean
-  EVAL(
-    paste0("z[,","`:=`(",paste0(prod_vars,"=",value_vars,"*",dur,collapse=","),")","]")
+  prod_vars <- paste0("p",1:length(value_vars))
+  for(i in 1:length(vvars)){
+    set(z, 
+        j=prod_vars[i], 
+        value=z[[vvars[i]]]*z[["dur"]]
     )
+  }
 
-  setkeyv(z,c(group_vars,interval_vars)) 
+  #nobs vars will be the count of non-missing obs for each time-period in y (ie, summed from temp nobs)
+  nobs_vars <- create_unused_name(paste("nobs",value_vars, sep="_"), c(names(x),names(y)))
+  sumprod_vars <- create_unused_name(paste("sumproduct",value_vars, sep="_"), c(names(x),names(y)))
   
   ###gforce data.table statement: sum, min, max are optimized for use in by statement.
     #but syntactically this is limited. 
@@ -283,18 +276,20 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   q <- EVAL(
     paste0(
       "z[,list(",
-      "xduration=sum(",dur,"),",
-      paste0(nobs_vars,"=sum(",temp_nobs_vars,")",collapse=","),
+      "xduration=sum(dur),",
+      paste0(nobs_vars,"=sum(",temp_nobs_vars,",na.rm=TRUE)",collapse=","),
       ",",
       paste0(sumprod_vars,"=sum(",prod_vars,",na.rm=TRUE)",collapse=","),
-      ",xminstart=min(",xinterval_vars[1], "),xmaxend=max(",xinterval_vars[2],")",
+      ",xminstart=min(interval_start),",
+      "xmaxend=max(interval_end)",
       "),",
-      "by=c(group_vars,interval_vars)]"
+      "keyby=c(gvars,i.ivars)]"
     )
   )
   
-  #note that mean isn't directly calculated in the by because a complex formula 
-    #like this is not optimized whereas a simple sum is
+  #note that weighted mean isn't directly calculated in the by
+    #because a complex formula that data.table gforce isn't capable of (yet)
+    
   
   #calculate the mean as value_vars=sum(value_vars*dur)/sum(temp_nobs_vars) by group_vars and interval_vars
   #note that I could just as use temp_nobs_vars instead of dur as the product
@@ -307,37 +302,20 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   
   #count length of each interval,
   #this will be used to count percentage of observed time x has in intervals of y
-  q[,yduration:=as.numeric( .SD[[2]]-.SD[[1]] + 1),.SDcols=c(interval_vars)]
+  q[,yduration:=as.numeric( .SD[[2]]-.SD[[1]] + 1),.SDcols=c(i.ivars)]
   
-    
+  q[is.na(xduration), c("xduration",nobs_vars):=0]
   stopifnot(q[,all(xduration<=yduration)])
 
-  
     #remove averages with too few observations in period
   #e.g. q[100*nobs_value/yduration < required_percentage, nobs_value:=NA]
   for(i in 1:length(value_vars)){
     EVAL(paste0("q[100*",nobs_vars[i],"/yduration < required_percentage, ", value_vars[i],":=as.numeric(NA)]"))
   }
   
-  ###when xminstart/xmaxend is outside the range of interval_vars, set it to interval_vars
-  
-  EVAL(
-    paste0(
-      "q[xminstart<",interval_vars[1],",xminstart:=",interval_vars[1],"]"
-    )
-  )
-  
-  EVAL(
-    paste0(
-      "q[xmaxend>",interval_vars[2],",xmaxend:=",interval_vars[2],"]"
-    )
-  )
-  
-  
-  
+  setnames(q, c(i.ivars,gvars),c(interval_vars,group_vars))
   setcolorder(q, c(group_vars,interval_vars,value_vars,"yduration","xduration",nobs_vars,
                    "xminstart","xmaxend"))
-  setkeyv(q,c(group_vars,interval_vars))
   q[]
   }
 
@@ -514,7 +492,6 @@ interval_weighted_avg_slow_f <- function(x, y,interval_vars,value_vars, group_va
 #value, returns the new intervals along with the old intervals with column names paste("o.",interval_vars) o is for "original"
 remove_overlaps <- function(x,interval_vars,group_vars=NULL){
   EVAL <- function(...)eval(parse(text=paste0(...)))
-  
   
   
   xkey <- key(x)

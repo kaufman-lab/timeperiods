@@ -49,6 +49,8 @@ Additional notes:
 - Warning, this function will reorder the rows of x and y. This occurs because data.table objects to funtions are pass by reference for efficiency (R is normally pass by value). If this is a concern, a couple of quick edits would maintain the order (by reordering at function completion).
 
 
+Memory: If you run into memory issues you can always do a for loop iterating over group vars.
+
 #### interval_weighted_avg_f Examples
 ```{r}
 library(data.table)

@@ -120,6 +120,9 @@ Additional notes:
     couple of quick edits would maintain the order (by reordering at
     function completion).
 
+Memory: If you run into memory issues you can always do a for loop
+iterating over group vars.
+
 #### interval\_weighted\_avg\_f Examples
 
 ``` r
@@ -160,7 +163,7 @@ length.
 interval_weighted_avg_f(x,y,interval_vars=c("start","end"),value_vars=c("value1"))
 ```
 
-    ## [1] "2020-01-30 13:38:17 passed errorcheck: x is non-overlapping."
+    ## [1] "2020-02-23 00:02:35 passed errorcheck: x is non-overlapping."
 
     ##    start end   value1 yduration xduration nobs_value1 xminstart xmaxend
     ## 1:     0   6       NA         7         6           6         1       6
@@ -179,7 +182,7 @@ timepoints):
 interval_weighted_avg_f(x,y,interval_vars=c("start","end"),value_vars=c("value1"),required_percentage=.8)
 ```
 
-    ## [1] "2020-01-30 13:38:18 passed errorcheck: x is non-overlapping."
+    ## [1] "2020-02-23 00:02:35 passed errorcheck: x is non-overlapping."
 
     ##    start end   value1 yduration xduration nobs_value1 xminstart xmaxend
     ## 1:     0   6 1.166667         7         6           6         1       6
