@@ -340,7 +340,7 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   
   setnames(q, c(i.ivars,gvars),c(interval_vars,group_vars))
   setcolorder(q, c(group_vars,interval_vars,value_vars,"yduration","xduration",nobs_vars,
-                   "dxminstart","xmaxend"))
+                   "xminstart","xmaxend"))
   
   if(verbose){
   print("everything else:")
