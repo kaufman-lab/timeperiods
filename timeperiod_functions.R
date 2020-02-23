@@ -107,7 +107,9 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
 #KEYS Y WILL BE ALTERED. KEYS OF X WILL BE ALTERED IF AND ONLY IF skip_overlap_check=TRUE
 
 interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NULL,
-                                    required_percentage=100,skip_overlap_check=FALSE){
+                                    required_percentage=100,skip_overlap_check=FALSE,
+                                    verbose=FALSE
+                                    ){
   EVAL <- function(...)eval(parse(text=paste0(...)))
 
   
@@ -221,10 +223,19 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   ivars <- paste0("i",1:2)
   i.ivars <- paste0("i.",ivars)
   
+  xx <- proc.time()
+  
   ### non-equi join of x and y (right join to y) and do an immediate group by EACHI####
   setkeyv(x,c(group_vars,interval_vars))
   setkeyv(y,c(group_vars,interval_vars))
   z <- foverlaps(x=y,y=x) #i.ivars are from x=y, ivars are from y=x
+  
+  if(verbose){
+  print("foverlaps duration:")
+  print(proc.time()-xx)
+  xx <- proc.time()}
+  
+  
   
   #using keyby ensures z is keyed by the variables that it will be grouped by subsequently
   ##if there does happen to be a column name conflict 
@@ -242,6 +253,10 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   EVAL(paste0("z[,interval_end:=pmin(",i.ivars[2],", ",ivars[2],")]"))
   EVAL(paste0("z[,interval_start:=pmax(",i.ivars[1],",",ivars[1],")] "))
   
+  if(verbose){
+  print("pmin/pmax duration:")
+  print(proc.time()-xx)}
+  xx <- proc.time()
   
   z[,dur := as.integer(interval_end-interval_start+1L)]
   
@@ -264,10 +279,15 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
         value=z[[vvars[i]]]*z[["dur"]]
     )
   }
+  
+  if(verbose){
+    print("pre-grouping var calculation:")
+  print(proc.time()-xx)
+  xx <- proc.time()}
 
   #nobs vars will be the count of non-missing obs for each time-period in y (ie, summed from temp nobs)
-  nobs_vars <- create_unused_name(paste("nobs",value_vars, sep="_"), c(names(x),names(y)))
-  sumprod_vars <- create_unused_name(paste("sumproduct",value_vars, sep="_"), c(names(x),names(y)))
+  nobs_vars <- paste("nobs",value_vars, sep="_")
+  sumprod_vars <- paste("sumproduct",value_vars, sep="_")
   
   ###gforce data.table statement: sum, min, max are optimized for use in by statement.
     #but syntactically this is limited. 
@@ -286,6 +306,11 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
       "keyby=c(gvars,i.ivars)]"
     )
   )
+  
+  if(verbose){
+  print("gforce:")
+  print(proc.time()-xx)
+  xx <- proc.time()}
   
   #note that weighted mean isn't directly calculated in the by
     #because a complex formula that data.table gforce isn't capable of (yet)
@@ -315,7 +340,12 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   
   setnames(q, c(i.ivars,gvars),c(interval_vars,group_vars))
   setcolorder(q, c(group_vars,interval_vars,value_vars,"yduration","xduration",nobs_vars,
-                   "xminstart","xmaxend"))
+                   "dxminstart","xmaxend"))
+  
+  if(verbose){
+  print("everything else:")
+  print(proc.time()-xx)}
+  
   q[]
   }
 
