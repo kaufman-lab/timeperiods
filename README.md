@@ -120,9 +120,6 @@ Additional notes:
     couple of quick edits would maintain the order (by reordering at
     function completion).
 
-Memory: If you run into memory issues you can always do a for loop
-iterating over group vars.
-
 #### interval\_weighted\_avg\_f Examples
 
 ``` r
@@ -163,7 +160,7 @@ length.
 interval_weighted_avg_f(x,y,interval_vars=c("start","end"),value_vars=c("value1"))
 ```
 
-    ## [1] "2020-02-23 00:02:35 passed errorcheck: x is non-overlapping."
+    ## [1] "2020-02-23 12:08:12 passed errorcheck: x is non-overlapping."
 
     ##    start end   value1 yduration xduration nobs_value1 xminstart xmaxend
     ## 1:     0   6       NA         7         6           6         1       6
@@ -182,7 +179,7 @@ timepoints):
 interval_weighted_avg_f(x,y,interval_vars=c("start","end"),value_vars=c("value1"),required_percentage=.8)
 ```
 
-    ## [1] "2020-02-23 00:02:35 passed errorcheck: x is non-overlapping."
+    ## [1] "2020-02-23 12:08:12 passed errorcheck: x is non-overlapping."
 
     ##    start end   value1 yduration xduration nobs_value1 xminstart xmaxend
     ## 1:     0   6 1.166667         7         6           6         1       6
@@ -200,11 +197,32 @@ See tests.R for more examples.
 #### interval\_weighted\_avg\_f Technical overview
 
 This function merges periods in y to periods in x by interval variables
-and possible grouping variables. Since the function is designed to
-return a row for each row in y, non-matches in y are identified by
-non-join merges and added in as rows with missing value variables. The
-value variables in the resulting data.table are averaged in a group-by
-statement (by periods defined in y as well by optional grouping
+and possible grouping variables using foverlaps. The goal is to
+calculate averages for values in y, so y is actually passed to the first
+argument of foverlaps. This confusion is due to inconsistency in how
+x\[y\] syntax is a right join whereas foverlaps(x,y) is a left join
+(this is probably due to foverlaps replicating an existing bioconductor
+function). Anyway, I chose to have interval\_weighted\_avg\_f(x,y) be a
+right join to match x\[y\] rather than foverlaps. foverlaps is called
+internally even though there’s an equivalent non-equi x\[y, on=\] join
+because foverlaps is slightly faster at producing all the columns needed
+to do the calculates.
+
+Specifically, in order to keep track of counts of observe time (which
+become weights in the weighted average function), I need to calculate
+the duration of overlap within a joined interval. It’s surprising that
+foverlaps doesn’t include this, but it needs to be calculated explicitly
+in my function using pmin on both of the end intervals (which becomes
+inteval\_end) and pmax on both of the start intervals (which becomes
+interval\_start). The differerence (interval\_end-interval\_start+1) is
+the duration (“dur”) of an overlapping joined interval. The sum of these
+durations across a y interval is the total count of unique units of time
+present in x that overlap with that y interval (note that x intervals
+need to be non-overlapping within groupings). Therefore, these units of
+time (“dur”) can be used as weights in a weighted average.
+
+The value variables in the resulting data.table are averaged in a
+group-by statement (by periods defined in y as well by optional grouping
 variables). Specifically, the average is a weighted average that takes
 into account the duration of an observed measurement in a desired
 averaging period (y interval). The function is written to make use of
@@ -216,13 +234,39 @@ value\_vars) requires use of some nonstandard evaluation. In this
 context, the non-standard evaluation is constructing a data.table call
 via paste and calling it with eval(parse(text=\<\>)).
 
-An additional consideration is that since data.table objects are
-pass-by-reference in functions (unless you explicitly make a copy which
-would be memory intensive), care needs to be taken not add or alter
-existing columns when using data.table’s column assignment by reference
-because this would alter the data.table object outside of the function
-environment. This is why there’s a bunch of code to deal with variable
-names so that temporary variables don’t clash with existing columns.
+An additional consideration is that since the function is written to
+accept data.tables with arbitrary columns, and in the joined data.table
+z there could be naming conflicts between user-supplied columns and
+constructed columns, all user-supplied columns are renamed to
+placeholder names until the end of the function. This avoids potential
+issues with naming conflicts with *temporary* internal columns that are
+not included in the output. However, output columns (xduration,
+yduration, xminstart, xmaxend) are reserved column names and can’t exist
+as columns that need to end up in z (specifically, they can’t be in
+group\_vars, interval\_vars, or value\_vars).
+
+Memory: The headline here is that if you run into memory issues you can
+always do a for loop iterating over group vars. There’s an example of
+this in tests.R.
+
+In greater detail: This function unfortunately does create a large
+allocation (the intermediate joined table z). Ideally the function would
+be written to avoid this large allocation by doing an immediate
+by=.EACHI (using an x\[y\] non-equi join). Unfortunately I’ve tested
+this approach and while it avoids the large memory allocation, it’s much
+slower due to pmin/pmax needing to be calculated within groups defined
+by .EACHI. If foverlaps directly produced the equivalents of the
+interval\_start/interval\_end variables, and if foverlaps supported
+immediate group-by operations then this function could be
+memory-efficient and relatively fast. That approach might still be
+slower than the current approach since GFORCE isn’t supported for
+by-without-by/.EACHI joins. Conceptually by-without-by creates each
+group and immediately summarizes that group before iterating to the next
+group. I think that .EACHI is probably conceptually at odds with the
+idea of GFORCE since GFORCE saves time by doing group-by operations in C
+on a bunch of groups at once. Still, there might be an eventual
+possibility for trading some speed for avoing the large memory
+allocation.
 
 ### interval\_weighted\_avg\_slow\_f
 
