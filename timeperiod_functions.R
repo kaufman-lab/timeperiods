@@ -53,6 +53,14 @@ cummax.Date <- function(x) as.Date(cummax(as.integer(x)),'1970-01-01')
 
 
 
+interval_weighted_avg <- function(x, y,value_vars,
+                                    required_percentage=100,skip_overlap_check=FALSE,
+                                    verbose=FALSE
+){
+  
+  
+}
+
 #function to take values over defined periods which are non-overlapping within individuals specified by group_vars
 #average those values up (or down) to a specified schedule
 #this schedule does not necessarily need to align to the periods
@@ -111,7 +119,8 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
                                     verbose=FALSE
                                     ){
   EVAL <- function(...)eval(parse(text=paste0(...)))
-
+  setkeyv(x,c(group_vars,interval_vars))
+  setkeyv(y,c(group_vars,interval_vars))
   
   
   if( any(c("yduration","xduration","xminstart","xmaxend")%in% c(interval_vars,value_vars,group_vars))){
@@ -203,8 +212,6 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   
   if(!skip_overlap_check){
 
-    setkeyv(x,c(group_vars,interval_vars))
-    
     #stop if there are overlapping periods within groups: 
     stopifnot(nrow(foverlaps(x,x))==nrow(x))  
     print(paste(Sys.time(),"passed errorcheck: x is non-overlapping."))
@@ -227,8 +234,6 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   xx <- proc.time()
   
   ### non-equi join of x and y (right join to y) and do an immediate group by EACHI####
-  setkeyv(x,c(group_vars,interval_vars))
-  setkeyv(y,c(group_vars,interval_vars))
   #subset x and y to only variables subsequently. 
    #this avoids  naming conflicts with extraneous variables which don't need to be part of the join.
   z <- foverlaps(x=y[,c(group_vars,interval_vars),with=FALSE],
