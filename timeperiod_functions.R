@@ -229,7 +229,11 @@ interval_weighted_avg_f <- function(x, y,interval_vars,value_vars, group_vars=NU
   ### non-equi join of x and y (right join to y) and do an immediate group by EACHI####
   setkeyv(x,c(group_vars,interval_vars))
   setkeyv(y,c(group_vars,interval_vars))
-  z <- foverlaps(x=y,y=x) #i.ivars are from x=y, ivars are from y=x
+  #subset x and y to only variables subsequently. 
+   #this avoids  naming conflicts with extraneous variables which don't need to be part of the join.
+  z <- foverlaps(x=y[,c(group_vars,interval_vars),with=FALSE],
+                 y=x[,c(group_vars,interval_vars,value_vars),with=FALSE]) 
+  #i.ivars are from x=y, ivars are from y=x
   
   if(verbose){
   print("foverlaps duration:")

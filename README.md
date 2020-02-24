@@ -160,7 +160,7 @@ length.
 interval_weighted_avg_f(x,y,interval_vars=c("start","end"),value_vars=c("value1"))
 ```
 
-    ## [1] "2020-02-23 12:08:12 passed errorcheck: x is non-overlapping."
+    ## [1] "2020-02-23 19:48:12 passed errorcheck: x is non-overlapping."
 
     ##    start end   value1 yduration xduration nobs_value1 xminstart xmaxend
     ## 1:     0   6       NA         7         6           6         1       6
@@ -179,7 +179,7 @@ timepoints):
 interval_weighted_avg_f(x,y,interval_vars=c("start","end"),value_vars=c("value1"),required_percentage=.8)
 ```
 
-    ## [1] "2020-02-23 12:08:12 passed errorcheck: x is non-overlapping."
+    ## [1] "2020-02-23 19:48:12 passed errorcheck: x is non-overlapping."
 
     ##    start end   value1 yduration xduration nobs_value1 xminstart xmaxend
     ## 1:     0   6 1.166667         7         6           6         1       6
@@ -243,7 +243,11 @@ issues with naming conflicts with *temporary* internal columns that are
 not included in the output. However, output columns (xduration,
 yduration, xminstart, xmaxend) are reserved column names and can’t exist
 as columns that need to end up in z (specifically, they can’t be in
-group\_vars, interval\_vars, or value\_vars).
+group\_vars, interval\_vars, or value\_vars). Since only
+group\_vars,interval\_vars, and value\_vars go into the foverlaps merge,
+columns named xduration, yduration, xminstart, and xmaxend are allowed
+to be other columns of x/y as long as they’re not group\_vars,
+value\_vars, or interval\_vars.
 
 Memory: The headline here is that if you run into memory issues you can
 always do a for loop iterating over group vars. There’s an example of
